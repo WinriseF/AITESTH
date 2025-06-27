@@ -1,33 +1,15 @@
-// 定义卡片样式
+import {  promptAction } from '@kit.ArkUI';
+import UUID from '@kingtous/uuid';
+import router from '@ohos.router';
+import { asyncGenerateQuestion, selectQuestionByGenerateId, GenerateQuestionDto } from '../common/API';
+import { QuestionModel } from '../model/QuestionModel';
+import { NavItem } from '../view/NavItem';
+
 @Styles function aitesCardStyle() {
   .backgroundColor(Color.White)
   .borderRadius(24)
   .padding(20)
   .shadow({ radius: 20, color: '#1A000000', offsetX: 0, offsetY: 4 })
-}
-
-// 底部导航栏单个项目的子组件
-@Component
-struct NavItem {
-  @Prop isSelected: boolean = false;
-  label: string = '';
-  icon: Resource = $r('app.media.icon_home');
-
-  build() {
-    Column({ space: 4 }) {
-      Image(this.icon)
-        .width(24).height(24)
-        .fillColor(this.isSelected ? '#6A67EA' : '#888888')
-      Text(this.label)
-        .fontSize(10)
-        .fontWeight(this.isSelected ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(this.isSelected ? '#6A67EA' : '#888888')
-    }
-    // ✅ 优化：这里不再需要 layoutWeight，父容器会负责对齐。
-    // 我们给它一个合适的内边距，确保点击区域足够大。
-    .padding({ top: 8, bottom: 8 })
-    .justifyContent(FlexAlign.Center)
-  }
 }
 
 @Entry
@@ -36,6 +18,109 @@ struct Index {
   @State questionCount: number = 20;
   @State selectedDifficulty: string = '中等';
   @State selectedTab: string = '首页';
+  @State currentTopic: string = 'IT 开发';
+
+  // --- 异步流程控制的状态变量 ---
+  @State isLoading: boolean = false; // 控制是否显示加载状态
+  private pollIntervalId: number = -1; // 存储轮询定时器的ID
+
+  // --- 核心业务逻辑函数 ---
+
+  /**
+   * 当点击"开始生成"按钮时触发的主函数
+   */
+  async handleStartQuiz() {
+    this.isLoading = true; // 1. 进入加载状态，UI会自动更新
+    promptAction.showToast({ message: '正在加载...' });
+
+    // a. 前端生成一个唯一的批次ID
+    const generateId = UUID.v4();
+
+    const params = new GenerateQuestionDto();
+    params.question = this.currentTopic;
+    params.questionNum = this.questionCount;
+    params.generateId = generateId;
+
+    try {
+      const startResult = await asyncGenerateQuestion(params);
+      // prompt.hideLoading();
+
+      if (startResult.code === 200 && startResult.data) {
+        this.startPolling(startResult.data.generateId);
+        promptAction.showToast({ message: '任务已在后台运行，正在获取结果...' });
+      } else {
+        throw new Error(startResult.message || '启动生成任务失败');
+      }
+
+    } catch (error) {
+      this.handleError(error.message);
+    }
+  }
+
+  /**
+   * 开始轮询结果的函数
+   * @param generateId 后端任务的唯一ID
+   */
+  startPolling(generateId: string) {
+    // 先清除上一次可能存在的定时器，防止内存泄漏
+    if (this.pollIntervalId !== -1) {
+      clearInterval(this.pollIntervalId);
+    }
+
+    this.pollIntervalId = setInterval(async () => {
+      try {
+        console.info(`[AITEST] 正在轮询结果, ID: ${generateId}`);
+        const result = await selectQuestionByGenerateId(generateId);
+
+        // e. 检查是否收到了包含题目的成功结果
+        if (result.code === 200 && result.data && result.data.length > 0) {
+          this.handleSuccess(result.data);
+        }
+        // 如果没收到，不做任何事，安静地等待下一次轮询
+      } catch (error) {
+        this.handleError(error.message);
+      }
+    }, 3000); // 每3秒查询一次
+
+    // 设置一个超时，比如2分钟后如果还没结果，就自动停止，防止无限轮询
+    setTimeout(() => {
+      // 如果2分钟后仍在加载状态，则判定为超时
+      if (this.isLoading) {
+        this.handleError('任务超时，请稍后重试。');
+      }
+    }, 120000);
+  }
+
+  /**
+   * 成功获取题目后的处理函数
+   * @param questions 获取到的题目列表
+   */
+  handleSuccess(questions: QuestionModel[]) {
+    clearInterval(this.pollIntervalId); // 停止轮询
+    this.pollIntervalId = -1;
+    this.isLoading = false;
+    promptAction.showToast({ message: '题目生成成功！即将跳转...' });
+
+    // f. 跳转到答题页面，并将题目作为参数传递过去
+    router.pushUrl({
+      url: 'pages/QuizPage',
+      params: {
+        questions: questions
+      }
+    });
+  }
+
+  /**
+   * 统一的错误处理函数
+   * @param errorMessage 错误消息
+   */
+  handleError(errorMessage: string) {
+    clearInterval(this.pollIntervalId);
+    this.pollIntervalId = -1;
+    this.isLoading = false;
+    promptAction.showToast({ message: `发生错误: ${errorMessage}` });
+    console.error(`[AITEST] Error: ${errorMessage}`);
+  }
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
@@ -43,9 +128,11 @@ struct Index {
       Column() {
         // 1. 顶部栏
         Row() {
-          Text('logo').fontSize(24).fontWeight(FontWeight.Bold).fontColor('#6A67EA')
+          Text('logo')
+            .fontSize(24).fontWeight(FontWeight.Bold).fontColor('#6A67EA')
           Blank()
-          Text('IT 开发').fontSize(18).fontWeight(FontWeight.Bold)
+          // 顶部标题现在会动态显示当前选择的主题
+          Text(this.currentTopic).fontSize(18).fontWeight(FontWeight.Bold)
         }
         .width('100%').height(56).padding({ left: 24, right: 24 })
 
@@ -58,18 +145,23 @@ struct Index {
                 Text('IT 开发').fontSize(16).fontWeight(FontWeight.Bold).fontColor(Color.White)
                 Text('已完成 45%').fontSize(12).fontColor(Color.White).opacity(0.9)
                 Progress({ value: 45, type: ProgressType.Linear }).color(Color.White).margin({ top: 10 })
-              }.padding(20).borderRadius(20).layoutWeight(1).linearGradient({
+              }
+              .padding(20).borderRadius(20).layoutWeight(1).linearGradient({
                 angle: 135,
                 colors: [['#4D81F3', 0], ['#818CF8', 1]]
               }).shadow({ radius: 10, color: '#304D81F3' })
+              .onClick(() => { this.currentTopic = 'IT 开发' }) // 点击时切换主题
+
               Column({ space: 8 }) {
                 Text('金融理财').fontSize(16).fontWeight(FontWeight.Bold).fontColor(Color.White)
                 Text('已完成 30%').fontSize(12).fontColor(Color.White).opacity(0.9)
                 Progress({ value: 30, type: ProgressType.Linear }).color(Color.White).margin({ top: 10 })
-              }.padding(20).borderRadius(20).layoutWeight(1).linearGradient({
+              }
+              .padding(20).borderRadius(20).layoutWeight(1).linearGradient({
                 angle: 135,
                 colors: [['#8C52FF', 0], ['#C084FC', 1]]
               }).shadow({ radius: 10, color: '#308C52FF' })
+              .onClick(() => { this.currentTopic = '金融理财' }) // 点击时切换主题
             }
 
             // 2.2 智能练习卡片
@@ -97,9 +189,16 @@ struct Index {
                 })
               }
               .width('100%')
-              Button('开始')
+
+              // ✅ “开始”按钮现在绑定了完整的业务逻辑
+              Button(this.isLoading ? '正在生成...' : '开始')
                 .width('100%').height(50).fontSize(16).fontWeight(FontWeight.Bold)
-                .backgroundColor('#6A67EA').borderRadius(25).margin({ top: 12 })
+                .backgroundColor(this.isLoading ? '#B0B0B0' : '#6A67EA')
+                .borderRadius(25).margin({ top: 12 })
+                .enabled(!this.isLoading) // 加载时禁用按钮
+                .onClick(() => {
+                  this.handleStartQuiz();
+                })
             }.aitesCardStyle()
 
             // 2.3 学习数据卡片
@@ -128,39 +227,27 @@ struct Index {
               }
             }.aitesCardStyle()
           }
-          // 确保滚动到底部时，内容不会被新的导航栏遮挡。
-          .padding({ left: 16, right: 16, top: 10, bottom: 40 })
+          .padding({ left: 16, right: 16, top: 10, bottom: 120 })
         }
       }
       .width('100%').backgroundColor('#F4F6F8')
 
-
-      // --- 第二层：底部导航栏 (最终优化版) ---
+      // --- 第二层：底部悬浮导航栏 ---
       Row() {
-        // ✅ 核心修改：移除所有 NavItem 上的 .layoutWeight(1)
-        // 让 NavItem 自己决定自己的宽度
-        NavItem({ isSelected: this.selectedTab === '首页', icon: $r('app.media.icon_home'), label: '首页' })
-          .onClick(() => { this.selectedTab = '首页' })
-        NavItem({ isSelected: this.selectedTab === '题库', icon: $r('app.media.icon_quiz'), label: '题库' })
-          .onClick(() => { this.selectedTab = '题库' })
-        NavItem({ isSelected: this.selectedTab === '错题', icon: $r('app.media.icon_mistake'), label: '错题' })
-          .onClick(() => { this.selectedTab = '错题' })
-        NavItem({ isSelected: this.selectedTab === '报告', icon: $r('app.media.icon_report'), label: '报告' })
-          .onClick(() => { this.selectedTab = '报告' })
-        NavItem({ isSelected: this.selectedTab === '我的', icon: $r('app.media.icon_profile'), label: '我的' })
-          .onClick(() => { this.selectedTab = '我的' })
+        NavItem({ isSelected: this.selectedTab === '首页', icon: $r('app.media.icon_home'), label: '首页' }).layoutWeight(1).onClick(() => { this.selectedTab = '首页' })
+        NavItem({ isSelected: this.selectedTab === '题库', icon: $r('app.media.icon_quiz'), label: '题库' }).layoutWeight(1).onClick(() => { this.selectedTab = '题库' })
+        NavItem({ isSelected: this.selectedTab === '错题', icon: $r('app.media.icon_mistake'), label: '错题' }).layoutWeight(1).onClick(() => { this.selectedTab = '错题' })
+        NavItem({ isSelected: this.selectedTab === '报告', icon: $r('app.media.icon_report'), label: '报告' }).layoutWeight(1).onClick(() => { this.selectedTab = '报告' })
+        NavItem({ isSelected: this.selectedTab === '我的', icon: $r('app.media.icon_profile'), label: '我的' }).layoutWeight(1).onClick(() => { this.selectedTab = '我的' })
       }
-      .width('100%')
+      .width('90%')
       .height(64)
-      // ✅ 核心修改：使用 justifyContent(FlexAlign.SpaceAround) 来实现完美的视觉均分
-      .justifyContent(FlexAlign.SpaceAround)
-      .border({ width: { top: 1 }, color: '#EAEAEA' })
+      .padding({left: 8, right: 8})
       .backgroundColor(Color.White)
-      // 使用 padding 和 env 变量来适配底部安全区域
-      .padding({ bottom: 'env(safe-area-inset-bottom)' })
-
+      .borderRadius(32)
+      .shadow({ radius: 15, color: '#2A000000', offsetY: 5 })
+      .margin({ bottom: 34 })
     }
     .width('100%').height('100%')
-    .backgroundColor('#F4F6F8')
   }
 }
