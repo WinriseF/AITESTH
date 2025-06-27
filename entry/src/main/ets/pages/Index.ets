@@ -1,4 +1,4 @@
-import {  promptAction } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
 import UUID from '@kingtous/uuid';
 import router from '@ohos.router';
 import { asyncGenerateQuestion, selectQuestionByGenerateId, GenerateQuestionDto } from '../common/API';
@@ -20,49 +20,40 @@ struct Index {
   @State selectedTab: string = '首页';
   @State currentTopic: string = 'IT 开发';
 
-  // --- 异步流程控制的状态变量 ---
-  @State isLoading: boolean = false; // 控制是否显示加载状态
-  private pollIntervalId: number = -1; // 存储轮询定时器的ID
+  @State isLoading: boolean = false;
+  private pollIntervalId: number = -1;
 
-  // --- 核心业务逻辑函数 ---
-
-  /**
-   * 当点击"开始生成"按钮时触发的主函数
-   */
   async handleStartQuiz() {
-    this.isLoading = true; // 1. 进入加载状态，UI会自动更新
+    this.isLoading = true;
     promptAction.showToast({ message: '正在加载...' });
-
-    // a. 前端生成一个唯一的批次ID
-    const generateId = UUID.v4();
 
     const params = new GenerateQuestionDto();
     params.question = this.currentTopic;
     params.questionNum = this.questionCount;
-    params.generateId = generateId;
 
     try {
       const startResult = await asyncGenerateQuestion(params);
-      // prompt.hideLoading();
 
       if (startResult.code === 200 && startResult.data) {
-        this.startPolling(startResult.data.generateId);
-        promptAction.showToast({ message: '任务已在后台运行，正在获取结果...' });
+        const innerResult = startResult.data;
+        if (innerResult.code === 200 && innerResult.data) {
+          this.startPolling(innerResult.data);
+          promptAction.showToast({ message: '任务已在后台运行，正在获取结果...' });
+        } else {
+          throw new Error(innerResult.message || '启动生成任务失败 (内部结果)');
+        }
       } else {
-        throw new Error(startResult.message || '启动生成任务失败');
+        throw new Error(startResult.message || '启动生成任务失败 (外部结果)');
       }
 
     } catch (error) {
-      this.handleError(error.message);
+      // [诊断优化] 打印完整的错误对象以帮助定位问题
+      console.error('[AITEST] 捕获到错误对象: ' + JSON.stringify(error));
+      this.handleError(error.message || '发生未知网络或逻辑错误');
     }
   }
 
-  /**
-   * 开始轮询结果的函数
-   * @param generateId 后端任务的唯一ID
-   */
   startPolling(generateId: string) {
-    // 先清除上一次可能存在的定时器，防止内存泄漏
     if (this.pollIntervalId !== -1) {
       clearInterval(this.pollIntervalId);
     }
@@ -72,56 +63,49 @@ struct Index {
         console.info(`[AITEST] 正在轮询结果, ID: ${generateId}`);
         const result = await selectQuestionByGenerateId(generateId);
 
-        // e. 检查是否收到了包含题目的成功结果
-        if (result.code === 200 && result.data && result.data.length > 0) {
-          this.handleSuccess(result.data);
+        if (result.code === 200 && result.data) {
+          const innerResult = result.data;
+          if (innerResult.code === 200 && innerResult.data && innerResult.data.length > 0) {
+            this.handleSuccess(innerResult.data);
+          }
         }
-        // 如果没收到，不做任何事，安静地等待下一次轮询
       } catch (error) {
-        this.handleError(error.message);
+        // [诊断优化]
+        console.error('[AITEST] 轮询时捕获到错误对象: ' + JSON.stringify(error));
+        this.handleError(error.message || '轮询过程中发生错误');
       }
-    }, 3000); // 每3秒查询一次
+    }, 3000);
 
-    // 设置一个超时，比如2分钟后如果还没结果，就自动停止，防止无限轮询
     setTimeout(() => {
-      // 如果2分钟后仍在加载状态，则判定为超时
       if (this.isLoading) {
         this.handleError('任务超时，请稍后重试。');
       }
     }, 120000);
   }
 
-  /**
-   * 成功获取题目后的处理函数
-   * @param questions 获取到的题目列表
-   */
   handleSuccess(questions: QuestionModel[]) {
-    clearInterval(this.pollIntervalId); // 停止轮询
+    clearInterval(this.pollIntervalId);
     this.pollIntervalId = -1;
     this.isLoading = false;
     promptAction.showToast({ message: '题目生成成功！即将跳转...' });
 
-    // f. 跳转到答题页面，并将题目作为参数传递过去
     router.pushUrl({
       url: 'pages/QuizPage',
       params: {
-        questions: questions
+        questions: JSON.stringify(questions)
       }
     });
   }
 
-  /**
-   * 统一的错误处理函数
-   * @param errorMessage 错误消息
-   */
   handleError(errorMessage: string) {
     clearInterval(this.pollIntervalId);
     this.pollIntervalId = -1;
     this.isLoading = false;
     promptAction.showToast({ message: `发生错误: ${errorMessage}` });
-    console.error(`[AITEST] Error: ${errorMessage}`);
+    console.error(`[AITEST] 最终错误信息: ${errorMessage}`);
   }
 
+  // UI 构建部分与您提供的代码相同，因此省略以保持简洁...
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       // 第一层：页面主内容

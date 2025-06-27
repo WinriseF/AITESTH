@@ -1,7 +1,7 @@
 import { http } from '@kit.NetworkKit';
 import { Result } from '../model/Result';
 
-const HOST = "http://172.27.127.11:8080/"
+const HOST = "http://192.168.31.202:8080/"
 
 export async function request(url:string,method:http.RequestMethod = http.RequestMethod.GET,params?:object,header?:object):Promise<http.HttpResponse> {
   // 先检查一下当前的url中是否包含了HOST
