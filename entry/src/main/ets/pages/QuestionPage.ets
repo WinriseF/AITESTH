@@ -1,5 +1,3 @@
-// 文件路径: src/main/ets/pages/QuizPage.ets
-
 import router from '@ohos.router';
 import { prompt } from '@kit.ArkUI';
 import { QuestionModel } from '../model/QuestionModel';
@@ -109,7 +107,6 @@ struct QuizPage {
     Column() {
       // 顶部导航
       Row() {
-        // ✅ 提醒：请确保 'app.media.ic_back' 资源已存在
         Image($r("app.media.ic_back"))
           .width(24).height(24).onClick(() => router.back())
         Text(`第 ${this.currentIndex + 1} / ${this.questions.length} 题`)

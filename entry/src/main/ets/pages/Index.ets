@@ -1,10 +1,24 @@
 import { promptAction } from '@kit.ArkUI';
-import UUID from '@kingtous/uuid';
+import http from '@ohos.net.http'; // 引入 http 模块
+import { BusinessError } from '@kit.BasicServicesKit'; // 引入 BusinessError
 import router from '@ohos.router';
-import { asyncGenerateQuestion, selectQuestionByGenerateId, GenerateQuestionDto } from '../common/API';
+// 引入我们需要的模型和DTO
+import { GenerateQuestionDto } from '../common/API';
 import { QuestionModel } from '../model/QuestionModel';
-import { NavItem } from '../view/NavItem';
 
+// --- 配置区域 ---
+// !!!【请务必修改这里】!!!
+// 将 "YOUR_COMPUTER_IP" 替换为您电脑的真实局域网IP地址
+const API_BASE_URL = 'http://192.168.31.202:8080'; // 已根据您的日志填入IP
+
+// 为后端返回的统一结果定义明确的类型
+interface ApiResponse<T> {
+  code: number;
+  message: string;
+  data: T;
+}
+
+// 定义卡片样式 (来自您的布局)
 @Styles function aitesCardStyle() {
   .backgroundColor(Color.White)
   .borderRadius(24)
@@ -12,67 +26,120 @@ import { NavItem } from '../view/NavItem';
   .shadow({ radius: 20, color: '#1A000000', offsetX: 0, offsetY: 4 })
 }
 
+// 底部导航栏单个项目的子组件 (来自您的布局)
+@Component
+struct NavItem {
+  @Prop isSelected: boolean = false;
+  label: string = '';
+  icon: Resource = $r('app.media.icon_home');
+
+  build() {
+    Column({ space: 4 }) {
+      Image(this.icon)
+        .width(24).height(24)
+        .fillColor(this.isSelected ? '#6A67EA' : '#888888')
+      Text(this.label)
+        .fontSize(10)
+        .fontWeight(this.isSelected ? FontWeight.Medium : FontWeight.Normal)
+        .fontColor(this.isSelected ? '#6A67EA' : '#888888')
+    }
+    .padding({ top: 8, bottom: 8 })
+    .justifyContent(FlexAlign.Center)
+  }
+}
+
+
 @Entry
 @Component
 struct Index {
-  @State questionCount: number = 20;
+  // --- UI状态变量 (来自您的布局) ---
+  @State questionCount: number = 5;
   @State selectedDifficulty: string = '中等';
   @State selectedTab: string = '首页';
-  @State currentTopic: string = 'IT 开发';
 
+  // --- 新增的功能状态变量 ---
+  @State currentTopic: string = 'IT 开发';
   @State isLoading: boolean = false;
   private pollIntervalId: number = -1;
 
+  // --- 新增的核心业务逻辑函数 ---
+  /**
+   * 核心网络请求函数 - 启动题目生成
+   */
   async handleStartQuiz() {
     this.isLoading = true;
-    promptAction.showToast({ message: '正在加载...' });
+    promptAction.showToast({ message: '正在提交任务...' });
 
-    const params = new GenerateQuestionDto();
-    params.question = this.currentTopic;
-    params.questionNum = this.questionCount;
+    const url = `${API_BASE_URL}/question/asyncGenerateQuestion`;
+    const params: GenerateQuestionDto = {
+      question: this.currentTopic,
+      questionNum: this.questionCount
+    };
 
+    console.info('[AITEST] 准备发送请求到: ' + url);
+    console.info('[AITEST] 请求参数: ' + JSON.stringify(params));
+
+    let httpRequest = http.createHttp();
     try {
-      const startResult = await asyncGenerateQuestion(params);
+      const response = await httpRequest.request(url, {
+        method: http.RequestMethod.POST,
+        header: {
+          'Content-Type': 'application/json'
+        },
+        extraData: JSON.stringify(params),
+        connectTimeout: 10000,
+        readTimeout: 10000,
+      });
 
-      if (startResult.code === 200 && startResult.data) {
-        const innerResult = startResult.data;
-        if (innerResult.code === 200 && innerResult.data) {
-          this.startPolling(innerResult.data);
-          promptAction.showToast({ message: '任务已在后台运行，正在获取结果...' });
+      console.info('[AITEST] 收到响应码: ' + response.responseCode);
+      console.info('[AITEST] 收到响应体: ' + response.result);
+
+      if (response.responseCode === 200) {
+        const resultJson: ApiResponse<string> = JSON.parse(response.result as string);
+        if (resultJson.code === 200 && resultJson.data) {
+          promptAction.showToast({ message: '任务已提交，开始轮询结果...' });
+          this.startPolling(resultJson.data);
         } else {
-          throw new Error(innerResult.message || '启动生成任务失败 (内部结果)');
+          throw new Error(resultJson.message || '后端返回业务错误');
         }
       } else {
-        throw new Error(startResult.message || '启动生成任务失败 (外部结果)');
+        throw new Error(`HTTP 错误，状态码: ${response.responseCode}`);
       }
-
-    } catch (error) {
-      // [诊断优化] 打印完整的错误对象以帮助定位问题
-      console.error('[AITEST] 捕获到错误对象: ' + JSON.stringify(error));
-      this.handleError(error.message || '发生未知网络或逻辑错误');
+    } catch (err) {
+      const error = err as BusinessError;
+      console.error('[AITEST] 网络请求捕获到严重错误: ' + JSON.stringify(error));
+      this.handleError(error.message || '网络连接失败，请检查IP地址和网络权限');
+    } finally {
+      httpRequest.destroy();
     }
   }
 
+  /**
+   * 轮询获取结果
+   */
   startPolling(generateId: string) {
     if (this.pollIntervalId !== -1) {
       clearInterval(this.pollIntervalId);
     }
 
     this.pollIntervalId = setInterval(async () => {
+      const url = `${API_BASE_URL}/question/question/${generateId}`;
+      console.info(`[AITEST] 正在轮询: ${url}`);
+      let httpRequest = http.createHttp();
       try {
-        console.info(`[AITEST] 正在轮询结果, ID: ${generateId}`);
-        const result = await selectQuestionByGenerateId(generateId);
-
-        if (result.code === 200 && result.data) {
-          const innerResult = result.data;
-          if (innerResult.code === 200 && innerResult.data && innerResult.data.length > 0) {
-            this.handleSuccess(innerResult.data);
+        const response = await httpRequest.request(url, { method: http.RequestMethod.GET });
+        if (response.responseCode === 200) {
+          const resultJson: ApiResponse<QuestionModel[]> = JSON.parse(response.result as string);
+          if (resultJson.code === 200 && resultJson.data && resultJson.data.length > 0) {
+            this.handleSuccess(resultJson.data);
+          } else {
+            console.info('[AITEST] 结果尚未就绪，继续轮询...');
           }
         }
-      } catch (error) {
-        // [诊断优化]
-        console.error('[AITEST] 轮询时捕获到错误对象: ' + JSON.stringify(error));
-        this.handleError(error.message || '轮询过程中发生错误');
+      } catch (err) {
+        // ...
+      } finally {
+        httpRequest.destroy();
       }
     }, 3000);
 
@@ -80,7 +147,7 @@ struct Index {
       if (this.isLoading) {
         this.handleError('任务超时，请稍后重试。');
       }
-    }, 120000);
+    }, 300000); // 5分钟超时
   }
 
   handleSuccess(questions: QuestionModel[]) {
@@ -89,12 +156,15 @@ struct Index {
     this.isLoading = false;
     promptAction.showToast({ message: '题目生成成功！即将跳转...' });
 
-    router.pushUrl({
-      url: 'pages/QuizPage',
-      params: {
-        questions: JSON.stringify(questions)
-      }
-    });
+    try {
+      router.pushUrl({
+        url: 'pages/QuestionPage',
+        params: { questions: JSON.stringify(questions) }
+      });
+    } catch (err) {
+      const error = err as BusinessError;
+      this.handleError(`页面跳转失败: ${error.message}. 请检查页面路径是否正确并在 module.json5 中注册.`);
+    }
   }
 
   handleError(errorMessage: string) {
@@ -105,17 +175,15 @@ struct Index {
     console.error(`[AITEST] 最终错误信息: ${errorMessage}`);
   }
 
-  // UI 构建部分与您提供的代码相同，因此省略以保持简洁...
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       // 第一层：页面主内容
       Column() {
         // 1. 顶部栏
         Row() {
-          Text('logo')
-            .fontSize(24).fontWeight(FontWeight.Bold).fontColor('#6A67EA')
+          Text('logo').fontSize(24).fontWeight(FontWeight.Bold).fontColor('#6A67EA')
           Blank()
-          // 顶部标题现在会动态显示当前选择的主题
+          //【功能集成】标题栏现在动态显示当前主题
           Text(this.currentTopic).fontSize(18).fontWeight(FontWeight.Bold)
         }
         .width('100%').height(56).padding({ left: 24, right: 24 })
@@ -134,7 +202,8 @@ struct Index {
                 angle: 135,
                 colors: [['#4D81F3', 0], ['#818CF8', 1]]
               }).shadow({ radius: 10, color: '#304D81F3' })
-              .onClick(() => { this.currentTopic = 'IT 开发' }) // 点击时切换主题
+              //【功能集成】点击时切换当前主题
+              .onClick(() => { this.currentTopic = 'IT 开发'; })
 
               Column({ space: 8 }) {
                 Text('金融理财').fontSize(16).fontWeight(FontWeight.Bold).fontColor(Color.White)
@@ -145,7 +214,8 @@ struct Index {
                 angle: 135,
                 colors: [['#8C52FF', 0], ['#C084FC', 1]]
               }).shadow({ radius: 10, color: '#308C52FF' })
-              .onClick(() => { this.currentTopic = '金融理财' }) // 点击时切换主题
+              //【功能集成】点击时切换当前主题
+              .onClick(() => { this.currentTopic = '金融理财'; })
             }
 
             // 2.2 智能练习卡片
@@ -173,8 +243,7 @@ struct Index {
                 })
               }
               .width('100%')
-
-              // ✅ “开始”按钮现在绑定了完整的业务逻辑
+              //【功能集成】将按钮与业务逻辑和加载状态绑定
               Button(this.isLoading ? '正在生成...' : '开始')
                 .width('100%').height(50).fontSize(16).fontWeight(FontWeight.Bold)
                 .backgroundColor(this.isLoading ? '#B0B0B0' : '#6A67EA')
@@ -211,27 +280,35 @@ struct Index {
               }
             }.aitesCardStyle()
           }
-          .padding({ left: 16, right: 16, top: 10, bottom: 120 })
+          // 确保滚动到底部时，内容不会被新的导航栏遮挡。
+          .padding({ left: 16, right: 16, top: 10, bottom: 80 }) // 增加了底部padding
         }
       }
       .width('100%').backgroundColor('#F4F6F8')
 
-      // --- 第二层：底部悬浮导航栏 ---
+
+      // --- 第二层：底部导航栏 (来自您的布局) ---
       Row() {
-        NavItem({ isSelected: this.selectedTab === '首页', icon: $r('app.media.icon_home'), label: '首页' }).layoutWeight(1).onClick(() => { this.selectedTab = '首页' })
-        NavItem({ isSelected: this.selectedTab === '题库', icon: $r('app.media.icon_quiz'), label: '题库' }).layoutWeight(1).onClick(() => { this.selectedTab = '题库' })
-        NavItem({ isSelected: this.selectedTab === '错题', icon: $r('app.media.icon_mistake'), label: '错题' }).layoutWeight(1).onClick(() => { this.selectedTab = '错题' })
-        NavItem({ isSelected: this.selectedTab === '报告', icon: $r('app.media.icon_report'), label: '报告' }).layoutWeight(1).onClick(() => { this.selectedTab = '报告' })
-        NavItem({ isSelected: this.selectedTab === '我的', icon: $r('app.media.icon_profile'), label: '我的' }).layoutWeight(1).onClick(() => { this.selectedTab = '我的' })
+        NavItem({ isSelected: this.selectedTab === '首页', icon: $r('app.media.icon_home'), label: '首页' })
+          .onClick(() => { this.selectedTab = '首页' })
+        NavItem({ isSelected: this.selectedTab === '题库', icon: $r('app.media.icon_quiz'), label: '题库' })
+          .onClick(() => { this.selectedTab = '题库' })
+        NavItem({ isSelected: this.selectedTab === '错题', icon: $r('app.media.icon_mistake'), label: '错题' })
+          .onClick(() => { this.selectedTab = '错题' })
+        NavItem({ isSelected: this.selectedTab === '报告', icon: $r('app.media.icon_report'), label: '报告' })
+          .onClick(() => { this.selectedTab = '报告' })
+        NavItem({ isSelected: this.selectedTab === '我的', icon: $r('app.media.icon_profile'), label: '我的' })
+          .onClick(() => { this.selectedTab = '我的' })
       }
-      .width('90%')
+      .width('100%')
       .height(64)
-      .padding({left: 8, right: 8})
+      .justifyContent(FlexAlign.SpaceAround)
+      .border({ width: { top: 1 }, color: '#EAEAEA' })
       .backgroundColor(Color.White)
-      .borderRadius(32)
-      .shadow({ radius: 15, color: '#2A000000', offsetY: 5 })
-      .margin({ bottom: 34 })
+      .padding({ bottom: 'env(safe-area-inset-bottom)' })
+
     }
     .width('100%').height('100%')
+    .backgroundColor('#F4F6F8')
   }
 }
