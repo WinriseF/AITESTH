@@ -1,57 +1,30 @@
 import { promptAction } from '@kit.ArkUI';
-import http from '@ohos.net.http'; // 引入 http 模块
-import { BusinessError } from '@kit.BasicServicesKit'; // 引入 BusinessError
+import http from '@ohos.net.http';
+import { BusinessError } from '@kit.BasicServicesKit';
 import router from '@ohos.router';
 import { QuestionModel } from '../model/QuestionModel';
+import UUID from '@kingtous/uuid'; // 引入UUID库来生成批次ID
 
 // --- 配置区域 ---
-// 【无需修改】已根据您的日志填入正确的IP地址
-const API_BASE_URL = 'http://192.168.31.202:8080';
+const API_BASE_URL = 'http://192.168.31.202:8080'; // 已根据您的日志填入IP
+const BATCH_SIZE = 15; // 定义每个并行请求的题目数量
 
-// 为后端返回的统一结果定义明确的类型
+// --- 类型定义 ---
 interface ApiResponse<T> {
   code: number;
   message: string;
   data: T;
 }
 
-// 【新增】为请求体定义明确的接口
 interface GenerateQuestionDto {
   question: string;
   questionNum: number;
-  difficulty: string; // 新增难度字段
+  difficulty: string;
+  generateId: string; // 新增批次ID字段
 }
 
-// 定义卡片样式
-@Styles function aitesCardStyle() {
-  .backgroundColor(Color.White)
-  .borderRadius(24)
-  .padding(20)
-  .shadow({ radius: 20, color: '#1A000000', offsetX: 0, offsetY: 4 })
-}
-
-// 底部导航栏单个项目的子组件
-@Component
-struct NavItem {
-  @Prop isSelected: boolean = false;
-  label: string = '';
-  icon: Resource = $r('app.media.icon_home');
-
-  build() {
-    Column({ space: 4 }) {
-      Image(this.icon)
-        .width(24).height(24)
-        .fillColor(this.isSelected ? '#6A67EA' : '#888888')
-      Text(this.label)
-        .fontSize(10)
-        .fontWeight(this.isSelected ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(this.isSelected ? '#6A67EA' : '#888888')
-    }
-    .padding({ top: 8, bottom: 8 })
-    .justifyContent(FlexAlign.Center)
-  }
-}
-
+@Styles function aitesCardStyle() { /* ... 样式代码省略 ... */ .backgroundColor(Color.White).borderRadius(24).padding(20).shadow({ radius: 20, color: '#1A000000', offsetX: 0, offsetY: 4 })}
+@Component struct NavItem { /* ... NavItem组件代码省略 ... */ @Prop isSelected: boolean = false; label: string = ''; icon: Resource = $r('app.media.icon_home'); build() { Column({ space: 4 }) { Image(this.icon) .width(24).height(24) .fillColor(this.isSelected ? '#6A67EA' : '#888888'); Text(this.label) .fontSize(10) .fontWeight(this.isSelected ? FontWeight.Medium : FontWeight.Normal) .fontColor(this.isSelected ? '#6A67EA' : '#888888') }.padding({ top: 8, bottom: 8 }).justifyContent(FlexAlign.Center) } }
 
 @Entry
 @Component
@@ -63,57 +36,86 @@ struct Index {
   @State isLoading: boolean = false;
   private pollIntervalId: number = -1;
 
+  /**
+   * 【重构】处理开始测验的逻辑，支持任务拆分和并行
+   */
   async handleStartQuiz() {
     this.isLoading = true;
-    promptAction.showToast({ message: '正在提交任务...' });
+    promptAction.showToast({ message: `正在提交生成任务...` });
 
+    // 1. 为本次所有请求生成一个统一的批次ID
+    const batchId = UUID.v4();
+    const totalQuestions = this.questionCount;
+    let remainingQuestions = totalQuestions;
+
+    const requestPromises: Promise<void>[] = [];
+
+    console.info(`[AITEST] 总任务开始，ID: ${batchId}, 总数: ${totalQuestions}`);
+
+    // 2. 将总数拆分为多个小任务
+    while (remainingQuestions > 0) {
+      const currentBatchSize = Math.min(remainingQuestions, BATCH_SIZE);
+      const params: GenerateQuestionDto = {
+        question: this.currentTopic,
+        questionNum: currentBatchSize,
+        difficulty: this.selectedDifficulty,
+        generateId: batchId // 所有请求都使用同一个批次ID
+      };
+      // 3. 为每个小任务创建一个异步请求的Promise
+      requestPromises.push(this.submitGenerationTask(params));
+      remainingQuestions -= currentBatchSize;
+    }
+
+    try {
+      // 4. 并行发送所有请求
+      await Promise.all(requestPromises);
+      // 5. 所有请求都成功提交后，开始轮询最终结果
+      promptAction.showToast({ message: `所有任务已提交，开始获取结果...` });
+      this.startPolling(batchId, totalQuestions);
+    } catch (error) {
+      this.handleError((error as Error).message);
+    }
+  }
+
+  /**
+   * 【新增】封装的单个生成任务的提交函数
+   * @param params 请求参数
+   * @returns 一个Promise，成功或失败
+   */
+  async submitGenerationTask(params: GenerateQuestionDto): Promise<void> {
     const url = `${API_BASE_URL}/question/asyncGenerateQuestion`;
-    // 在请求参数中加入难度
-    const params: GenerateQuestionDto = {
-      question: this.currentTopic,
-      questionNum: this.questionCount,
-      difficulty: this.selectedDifficulty // 将用户选择的难度添加进来
-    };
-
-    console.info('[AITEST] 准备发送请求到: ' + url);
-    console.info('[AITEST] 请求参数: ' + JSON.stringify(params));
-
+    console.info(`[AITEST] 提交子任务: ${JSON.stringify(params)}`);
     let httpRequest = http.createHttp();
     try {
       const response = await httpRequest.request(url, {
         method: http.RequestMethod.POST,
-        header: {
-          'Content-Type': 'application/json'
-        },
+        header: { 'Content-Type': 'application/json' },
         extraData: JSON.stringify(params),
-        connectTimeout: 10000,
-        readTimeout: 10000,
+        connectTimeout: 15000,
+        readTimeout: 15000,
       });
-
-      console.info('[AITEST] 收到响应码: ' + response.responseCode);
-      console.info('[AITEST] 收到响应体: ' + response.result);
 
       if (response.responseCode === 200) {
         const resultJson: ApiResponse<string> = JSON.parse(response.result as string);
-        if (resultJson.code === 200 && resultJson.data) {
-          promptAction.showToast({ message: '任务已提交，开始轮询结果...' });
-          this.startPolling(resultJson.data);
-        } else {
-          throw new Error(resultJson.message || '后端返回业务错误');
+        if (resultJson.code === 200) {
+          console.info(`[AITEST] 子任务提交成功, generateId: ${resultJson.data}`);
+          return Promise.resolve(); // 表示这个子任务提交成功
         }
-      } else {
-        throw new Error(`HTTP 错误，状态码: ${response.responseCode}`);
       }
-    } catch (err) {
-      const error = err as BusinessError;
-      console.error('[AITEST] 网络请求捕获到严重错误: ' + JSON.stringify(error));
-      this.handleError(error.message || '网络连接失败，请检查IP地址和网络权限');
+      // 如果任何一个环节出错，就抛出异常
+      throw new Error(`一个子任务提交失败: ${response.result}`);
     } finally {
       httpRequest.destroy();
     }
   }
 
-  startPolling(generateId: string) {
+
+  /**
+   * 【重构】轮询获取结果，增加期望数量的判断
+   * @param generateId 批次ID
+   * @param expectedCount 期望得到的题目总数
+   */
+  startPolling(generateId: string, expectedCount: number) {
     if (this.pollIntervalId !== -1) {
       clearInterval(this.pollIntervalId);
     }
@@ -125,10 +127,13 @@ struct Index {
         const response = await httpRequest.request(url, { method: http.RequestMethod.GET });
         if (response.responseCode === 200) {
           const resultJson: ApiResponse<QuestionModel[]> = JSON.parse(response.result as string);
-          if (resultJson.code === 200 && resultJson.data && resultJson.data.length > 0) {
-            this.handleSuccess(resultJson.data);
-          } else {
-            console.info('[AITEST] 结果尚未就绪，继续轮询...');
+          if (resultJson.code === 200 && resultJson.data) {
+            // 【关键修改】判断当前获取的数量是否已达到期望值
+            if (resultJson.data.length >= expectedCount) {
+              this.handleSuccess(resultJson.data);
+            } else {
+              console.info(`[AITEST] 结果获取中: ${resultJson.data.length}/${expectedCount}`);
+            }
           }
         }
       } catch (err) {
@@ -136,13 +141,13 @@ struct Index {
       } finally {
         httpRequest.destroy();
       }
-    }, 3000);
+    }, 5000); // 轮询间隔可以适当延长到5秒
 
     setTimeout(() => {
       if (this.isLoading) {
         this.handleError('任务超时，请稍后重试。');
       }
-    }, 300000); // 5分钟超时
+    }, 600000); // 将总超时延长到10分钟以应对大批量请求
   }
 
   handleSuccess(questions: QuestionModel[]) {
@@ -152,14 +157,12 @@ struct Index {
     promptAction.showToast({ message: '题目生成成功！即将跳转...' });
 
     try {
-      // 【最终修正】根据您的日志和多次强调，将URL修正为 QuestionPage
       router.pushUrl({
         url: 'pages/QuestionPage',
         params: { questions: JSON.stringify(questions) }
       });
     } catch (err) {
-      const error = err as BusinessError;
-      this.handleError(`页面跳转失败: ${error.message}. 请检查页面路径是否正确并在 module.json5 中注册.`);
+      this.handleError(`页面跳转失败: ${(err as Error).message}.`);
     }
   }
 
@@ -171,6 +174,7 @@ struct Index {
     console.error(`[AITEST] 最终错误信息: ${errorMessage}`);
   }
 
+  // UI build() 方法保持不变，因此省略...
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
