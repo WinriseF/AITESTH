@@ -1,10 +1,20 @@
+// 文件路径: src/main/ets/pages/QuizPage.ets
+
 import router from '@ohos.router';
-import { prompt } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI'; // 使用 promptAction 替代 prompt
 import { QuestionModel } from '../model/QuestionModel';
 
-interface QuestionPageParams{
-  questions: QuestionModel[];
+// 为路由参数定义一个明确的接口
+interface QuizPageParams {
+  questions?: string;
 }
+
+// 为ForEach中的选项对象定义一个明确的接口
+interface QuizOption {
+  label: string;
+  text: string;
+}
+
 // 答题选项的子组件
 @Component
 struct OptionItem {
@@ -20,7 +30,7 @@ struct OptionItem {
         .width(36).height(36).borderRadius('50%').fontSize(16).fontWeight(FontWeight.Bold)
         .fontColor(this.isSelected ? Color.White : '#6A67EA')
         .backgroundColor(this.isSelected ? '#6A67EA' : '#F0F2FF')
-        .align(Alignment.Center)
+        .textAlign(TextAlign.Center)
 
       Text(this.text)
         .fontSize(16)
@@ -52,31 +62,33 @@ struct QuizPage {
   @State isQuizFinished: boolean = false;
 
   aboutToAppear() {
-    const params = router.getParams() as QuestionPageParams;
-    if (params && params.questions) {
-      // ✅ 修正：使用手动赋值替换 Object.assign，以符合ArkTS规范
-      this.questions = params.questions.map(q => {
-        let question = new QuestionModel();
-        question.id = q.id;
-        question.generateId = q.generateId;
-        question.question = q.question;
-        question.optionA = q.optionA;
-        question.optionB = q.optionB;
-        question.optionC = q.optionC;
-        question.optionD = q.optionD;
-        question.answer = q.answer;
-        question.analysis = q.analysis;
-        return question;
-      });
+    // 将获取的参数强制转换为我们定义的接口类型
+    const params = router.getParams() as QuizPageParams;
+    // 现在可以安全地访问 params.questions
+    if (params && params.questions && typeof params.questions === 'string') {
+      try {
+        const parsedQuestions = JSON.parse(params.questions) as QuestionModel[];
+
+        if (Array.isArray(parsedQuestions)) {
+          this.questions = parsedQuestions;
+        } else {
+          throw new Error("Parsed data is not an array.");
+        }
+      } catch (e) {
+        console.error(`[AITEST] QuizPage JSON parse error: ${JSON.stringify(e)}`);
+        promptAction.showToast({ message: "题目数据格式错误！" });
+        router.back();
+      }
     } else {
-      prompt.showToast({ message: "题目加载失败！" });
+      console.error('[AITEST] QuizPage failed to get questions from router params.');
+      promptAction.showToast({ message: "题目加载失败！" });
       router.back();
     }
   }
 
   checkAnswer() {
     if (!this.selectedOption) {
-      prompt.showToast({ message: "请选择一个答案！" });
+      promptAction.showToast({ message: "请选择一个答案！" });
       return;
     }
     if (this.selectedOption === (this.questions[this.currentIndex].answer ?? '')) {
@@ -109,9 +121,12 @@ struct QuizPage {
       Row() {
         Image($r("app.media.ic_back"))
           .width(24).height(24).onClick(() => router.back())
+        Blank().layoutWeight(1) // 使用Blank来填充空间
         Text(`第 ${this.currentIndex + 1} / ${this.questions.length} 题`)
-          .fontSize(18).fontWeight(FontWeight.Bold).margin({left:16})
-        Blank()
+          .fontSize(18).fontWeight(FontWeight.Bold)
+        Blank().layoutWeight(1)
+        // 增加一个占位符，让标题居中
+        Image($r("app.media.ic_back")).width(24).height(24).visibility(Visibility.Hidden)
       }
       .width('100%').height(56).padding({ left: 16, right: 16 })
 
@@ -134,21 +149,36 @@ struct QuizPage {
         Text(this.questions[this.currentIndex].question ?? '题目加载中...')
           .fontSize(20).fontWeight(FontWeight.Bold).width('100%').textAlign(TextAlign.Start)
 
-        OptionItem({ label: 'A', text: this.questions[this.currentIndex].optionA ?? '', isSelected: this.selectedOption === 'A', showAnswer: this.showAnswer, isCorrect: (this.questions[this.currentIndex].answer ?? '') === 'A' })
-          .onClick(() => { if (!this.showAnswer) this.selectedOption = 'A' })
-        OptionItem({ label: 'B', text: this.questions[this.currentIndex].optionB ?? '', isSelected: this.selectedOption === 'B', showAnswer: this.showAnswer, isCorrect: (this.questions[this.currentIndex].answer ?? '') === 'B' })
-          .onClick(() => { if (!this.showAnswer) this.selectedOption = 'B' })
-        OptionItem({ label: 'C', text: this.questions[this.currentIndex].optionC ?? '', isSelected: this.selectedOption === 'C', showAnswer: this.showAnswer, isCorrect: (this.questions[this.currentIndex].answer ?? '') === 'C' })
-          .onClick(() => { if (!this.showAnswer) this.selectedOption = 'C' })
-        OptionItem({ label: 'D', text: this.questions[this.currentIndex].optionD ?? '', isSelected: this.selectedOption === 'D', showAnswer: this.showAnswer, isCorrect: (this.questions[this.currentIndex].answer ?? '') === 'D' })
-          .onClick(() => { if (!this.showAnswer) this.selectedOption = 'D' })
+        // 使用ForEach来渲染选项，确保UI正确更新
+        ForEach(
+          // 1. 为当前题目动态创建选项数组
+          [
+            { label: 'A', text: this.questions[this.currentIndex].optionA ?? '' },
+            { label: 'B', text: this.questions[this.currentIndex].optionB ?? '' },
+            { label: 'C', text: this.questions[this.currentIndex].optionC ?? '' },
+            { label: 'D', text: this.questions[this.currentIndex].optionD ?? '' }
+          ],
+          // 2. 为每个选项创建一个OptionItem
+          (option: QuizOption) => {
+            OptionItem({
+              label: option.label,
+              text: option.text,
+              isSelected: this.selectedOption === option.label,
+              showAnswer: this.showAnswer,
+              isCorrect: (this.questions[this.currentIndex].answer ?? '') === option.label
+            })
+              .onClick(() => { if (!this.showAnswer) this.selectedOption = option.label })
+          },
+          // 3. 【关键修复】提供一个在不同题目间也唯一的key
+          (option: QuizOption) => `${this.currentIndex}-${option.label}`
+        )
 
         if (this.showAnswer) {
           Column() {
             Text(`正确答案：${this.questions[this.currentIndex].answer ?? 'N/A'}`)
               .fontSize(16).fontWeight(FontWeight.Bold).margin({ bottom: 8 })
             Text(this.questions[this.currentIndex].analysis ?? '暂无解析')
-              .fontSize(14).fontColor(Color.Gray)
+              .fontSize(14).fontColor(Color.Gray).lineHeight(20)
           }
           .width('100%').padding(16).borderRadius(12).backgroundColor(Color.White)
           .alignItems(HorizontalAlign.Start).margin({top: 10})
@@ -156,7 +186,7 @@ struct QuizPage {
 
         Button(this.showAnswer ? `下一题 (${this.currentIndex + 1}/${this.questions.length})` : '确认答案')
           .width('100%').height(50).fontSize(16).fontWeight(FontWeight.Bold)
-          .backgroundColor('#007bff').margin({ top: 20 })
+          .backgroundColor('#6A67EA').margin({ top: 20 }) // 统一品牌色
           .onClick(() => {
             this.showAnswer ? this.nextQuestion() : this.checkAnswer()
           })
@@ -171,9 +201,9 @@ struct QuizPage {
       Text(`您的得分是：${this.score} / ${this.questions.length}`)
         .fontSize(20)
       Button('再来一次').onClick(() => this.restartQuiz())
-        .width('80%').height(50).margin({ top: 30 })
+        .width('80%').height(50).margin({ top: 30 }).backgroundColor('#6A67EA')
       Button('返回首页').onClick(() => router.back())
-        .width('80%').height(50).type(ButtonType.Normal)
+        .width('80%').height(50).type(ButtonType.Normal).backgroundColor(Color.White).fontColor(Color.Black)
     }
     .width('100%').height('100%').justifyContent(FlexAlign.Center)
   }
