@@ -2,14 +2,11 @@ import { promptAction } from '@kit.ArkUI';
 import http from '@ohos.net.http'; // 引入 http 模块
 import { BusinessError } from '@kit.BasicServicesKit'; // 引入 BusinessError
 import router from '@ohos.router';
-// 引入我们需要的模型和DTO
-import { GenerateQuestionDto } from '../common/API';
 import { QuestionModel } from '../model/QuestionModel';
 
 // --- 配置区域 ---
-// !!!【请务必修改这里】!!!
-// 将 "YOUR_COMPUTER_IP" 替换为您电脑的真实局域网IP地址
-const API_BASE_URL = 'http://192.168.31.202:8080'; // 已根据您的日志填入IP
+// 【无需修改】已根据您的日志填入正确的IP地址
+const API_BASE_URL = 'http://192.168.31.202:8080';
 
 // 为后端返回的统一结果定义明确的类型
 interface ApiResponse<T> {
@@ -18,8 +15,14 @@ interface ApiResponse<T> {
   data: T;
 }
 
+// 【新增】为请求体定义明确的接口
+interface GenerateQuestionDto {
+  question: string;
+  questionNum: number;
+  difficulty: string; // 新增难度字段
+}
 
-// 定义卡片样式 (来自您的布局)
+// 定义卡片样式
 @Styles function aitesCardStyle() {
   .backgroundColor(Color.White)
   .borderRadius(24)
@@ -27,7 +30,7 @@ interface ApiResponse<T> {
   .shadow({ radius: 20, color: '#1A000000', offsetX: 0, offsetY: 4 })
 }
 
-// 底部导航栏单个项目的子组件 (来自您的布局)
+// 底部导航栏单个项目的子组件
 @Component
 struct NavItem {
   @Prop isSelected: boolean = false;
@@ -53,28 +56,23 @@ struct NavItem {
 @Entry
 @Component
 struct Index {
-  // --- UI状态变量 (来自您的布局) ---
-  @State questionCount: number = 5;
+  @State questionCount: number = 20;
   @State selectedDifficulty: string = '中等';
   @State selectedTab: string = '首页';
-
-  // --- 新增的功能状态变量 ---
   @State currentTopic: string = 'IT 开发';
   @State isLoading: boolean = false;
   private pollIntervalId: number = -1;
 
-  // --- 新增的核心业务逻辑函数 ---
-  /**
-   * 核心网络请求函数 - 启动题目生成
-   */
   async handleStartQuiz() {
     this.isLoading = true;
     promptAction.showToast({ message: '正在提交任务...' });
 
     const url = `${API_BASE_URL}/question/asyncGenerateQuestion`;
+    // 在请求参数中加入难度
     const params: GenerateQuestionDto = {
       question: this.currentTopic,
-      questionNum: this.questionCount
+      questionNum: this.questionCount,
+      difficulty: this.selectedDifficulty // 将用户选择的难度添加进来
     };
 
     console.info('[AITEST] 准备发送请求到: ' + url);
@@ -115,9 +113,6 @@ struct Index {
     }
   }
 
-  /**
-   * 轮询获取结果
-   */
   startPolling(generateId: string) {
     if (this.pollIntervalId !== -1) {
       clearInterval(this.pollIntervalId);
@@ -125,7 +120,6 @@ struct Index {
 
     this.pollIntervalId = setInterval(async () => {
       const url = `${API_BASE_URL}/question/question/${generateId}`;
-      console.info(`[AITEST] 正在轮询: ${url}`);
       let httpRequest = http.createHttp();
       try {
         const response = await httpRequest.request(url, { method: http.RequestMethod.GET });
@@ -158,6 +152,7 @@ struct Index {
     promptAction.showToast({ message: '题目生成成功！即将跳转...' });
 
     try {
+      // 【最终修正】根据您的日志和多次强调，将URL修正为 QuestionPage
       router.pushUrl({
         url: 'pages/QuestionPage',
         params: { questions: JSON.stringify(questions) }
@@ -178,21 +173,16 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      // 第一层：页面主内容
       Column() {
-        // 1. 顶部栏
         Row() {
           Text('logo').fontSize(24).fontWeight(FontWeight.Bold).fontColor('#6A67EA')
           Blank()
-          //【功能集成】标题栏现在动态显示当前主题
           Text(this.currentTopic).fontSize(18).fontWeight(FontWeight.Bold)
         }
         .width('100%').height(56).padding({ left: 24, right: 24 })
 
-        // 2. 可滚动的主体
         Scroll() {
           Column({ space: 16 }) {
-            // 2.1 课程选择卡片
             Row({ space: 16 }) {
               Column({ space: 8 }) {
                 Text('IT 开发').fontSize(16).fontWeight(FontWeight.Bold).fontColor(Color.White)
@@ -203,7 +193,6 @@ struct Index {
                 angle: 135,
                 colors: [['#4D81F3', 0], ['#818CF8', 1]]
               }).shadow({ radius: 10, color: '#304D81F3' })
-              //【功能集成】点击时切换当前主题
               .onClick(() => { this.currentTopic = 'IT 开发'; })
 
               Column({ space: 8 }) {
@@ -215,11 +204,9 @@ struct Index {
                 angle: 135,
                 colors: [['#8C52FF', 0], ['#C084FC', 1]]
               }).shadow({ radius: 10, color: '#308C52FF' })
-              //【功能集成】点击时切换当前主题
               .onClick(() => { this.currentTopic = '金融理财'; })
             }
 
-            // 2.2 智能练习卡片
             Column({ space: 16 }) {
               Text('开始智能练习').fontSize(18).fontWeight(FontWeight.Bold).alignSelf(ItemAlign.Start)
               Text('AI 将为您生成专业题目').fontSize(13).fontColor(Color.Gray).alignSelf(ItemAlign.Start)
@@ -244,18 +231,16 @@ struct Index {
                 })
               }
               .width('100%')
-              //【功能集成】将按钮与业务逻辑和加载状态绑定
               Button(this.isLoading ? '正在生成...' : '开始')
                 .width('100%').height(50).fontSize(16).fontWeight(FontWeight.Bold)
                 .backgroundColor(this.isLoading ? '#B0B0B0' : '#6A67EA')
                 .borderRadius(25).margin({ top: 12 })
-                .enabled(!this.isLoading) // 加载时禁用按钮
+                .enabled(!this.isLoading)
                 .onClick(() => {
                   this.handleStartQuiz();
                 })
             }.aitesCardStyle()
 
-            // 2.3 学习数据卡片
             Column({ space: 16 }) {
               Row() {
                 Text('学习数据').fontSize(18).fontWeight(FontWeight.Bold)
@@ -281,14 +266,11 @@ struct Index {
               }
             }.aitesCardStyle()
           }
-          // 确保滚动到底部时，内容不会被新的导航栏遮挡。
-          .padding({ left: 16, right: 16, top: 10, bottom: 80 }) // 增加了底部padding
+          .padding({ left: 16, right: 16, top: 10, bottom: 80 })
         }
       }
       .width('100%').backgroundColor('#F4F6F8')
 
-
-      // --- 第二层：底部导航栏 (来自您的布局) ---
       Row() {
         NavItem({ isSelected: this.selectedTab === '首页', icon: $r('app.media.icon_home'), label: '首页' })
           .onClick(() => { this.selectedTab = '首页' })
