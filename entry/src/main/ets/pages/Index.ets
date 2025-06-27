@@ -1,5 +1,3 @@
-// 文件路径: src/main/ets/pages/Index.ets
-
 // 定义卡片样式
 @Styles function aitesCardStyle() {
   .backgroundColor(Color.White)
@@ -131,7 +129,7 @@ struct Index {
             }.aitesCardStyle()
           }
           // 确保滚动到底部时，内容不会被新的导航栏遮挡。
-          .padding({ left: 16, right: 16, top: 10, bottom: 90 })
+          .padding({ left: 16, right: 16, top: 10, bottom: 40 })
         }
       }
       .width('100%').backgroundColor('#F4F6F8')
