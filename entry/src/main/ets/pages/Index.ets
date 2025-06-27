@@ -25,8 +25,9 @@ struct NavItem {
         .fontWeight(this.isSelected ? FontWeight.Medium : FontWeight.Normal)
         .fontColor(this.isSelected ? '#6A67EA' : '#888888')
     }
-    // ✅ 修正：移除了内部的 .layoutWeight(1)，因为它应该在外部使用
-    .height('100%')
+    // ✅ 优化：这里不再需要 layoutWeight，父容器会负责对齐。
+    // 我们给它一个合适的内边距，确保点击区域足够大。
+    .padding({ top: 8, bottom: 8 })
     .justifyContent(FlexAlign.Center)
   }
 }
@@ -59,19 +60,25 @@ struct Index {
                 Text('IT 开发').fontSize(16).fontWeight(FontWeight.Bold).fontColor(Color.White)
                 Text('已完成 45%').fontSize(12).fontColor(Color.White).opacity(0.9)
                 Progress({ value: 45, type: ProgressType.Linear }).color(Color.White).margin({ top: 10 })
-              }.padding(20).borderRadius(20).layoutWeight(1).linearGradient({ angle: 135, colors: [['#4D81F3', 0], ['#818CF8', 1]] }).shadow({ radius: 10, color: '#304D81F3' })
+              }.padding(20).borderRadius(20).layoutWeight(1).linearGradient({
+                angle: 135,
+                colors: [['#4D81F3', 0], ['#818CF8', 1]]
+              }).shadow({ radius: 10, color: '#304D81F3' })
               Column({ space: 8 }) {
                 Text('金融理财').fontSize(16).fontWeight(FontWeight.Bold).fontColor(Color.White)
                 Text('已完成 30%').fontSize(12).fontColor(Color.White).opacity(0.9)
                 Progress({ value: 30, type: ProgressType.Linear }).color(Color.White).margin({ top: 10 })
-              }.padding(20).borderRadius(20).layoutWeight(1).linearGradient({ angle: 135, colors: [['#8C52FF', 0], ['#C084FC', 1]] }).shadow({ radius: 10, color: '#308C52FF' })
+              }.padding(20).borderRadius(20).layoutWeight(1).linearGradient({
+                angle: 135,
+                colors: [['#8C52FF', 0], ['#C084FC', 1]]
+              }).shadow({ radius: 10, color: '#308C52FF' })
             }
 
             // 2.2 智能练习卡片
             Column({ space: 16 }) {
               Text('开始智能练习').fontSize(18).fontWeight(FontWeight.Bold).alignSelf(ItemAlign.Start)
               Text('AI 将为您生成专业题目').fontSize(13).fontColor(Color.Gray).alignSelf(ItemAlign.Start)
-              Divider().strokeWidth(1).color('#F0F0F0').margin({ top: 4, bottom: 4})
+              Divider().strokeWidth(1).color('#F0F0F0').margin({ top: 4, bottom: 4 })
               Row() {
                 Text('题目数量').fontSize(14)
                 Blank()
@@ -108,7 +115,8 @@ struct Index {
                 Column({ space: 10 }) {
                   Text('答题正确率').fontSize(14).fontColor(Color.Gray)
                   Stack({ alignContent: Alignment.Center }) {
-                    Progress({ value: 85, type: ProgressType.Ring }).width(100).height(100).style({ strokeWidth: 12 }).color('#4D81F3')
+                    Progress({ value: 85, type: ProgressType.Ring }).width(100).height(100).style({ strokeWidth: 12 })
+                      .color('#4D81F3')
                     Text('85%').fontSize(24).fontWeight(FontWeight.Bold)
                   }
                 }.layoutWeight(1).alignItems(HorizontalAlign.Center)
@@ -122,34 +130,39 @@ struct Index {
               }
             }.aitesCardStyle()
           }
-          .padding({left: 16, right: 16, top: 10, bottom: 120}) // 增加更多底部边距
+          // 确保滚动到底部时，内容不会被新的导航栏遮挡。
+          .padding({ left: 16, right: 16, top: 10, bottom: 90 })
         }
       }
-      .width('100%').height('100%').backgroundColor('#F4F6F8')
+      .width('100%').backgroundColor('#F4F6F8')
 
-      // --- 第二层：底部悬浮导航栏 (已修正) ---
+
+      // --- 第二层：底部导航栏 (最终优化版) ---
       Row() {
-        // ✅ 修正：将 .layoutWeight(1) 应用在 NavItem 的调用上，而不是其内部
+        // ✅ 核心修改：移除所有 NavItem 上的 .layoutWeight(1)
+        // 让 NavItem 自己决定自己的宽度
         NavItem({ isSelected: this.selectedTab === '首页', icon: $r('app.media.icon_home'), label: '首页' })
-          .layoutWeight(1).onClick(() => { this.selectedTab = '首页' })
+          .onClick(() => { this.selectedTab = '首页' })
         NavItem({ isSelected: this.selectedTab === '题库', icon: $r('app.media.icon_quiz'), label: '题库' })
-          .layoutWeight(1).onClick(() => { this.selectedTab = '题库' })
+          .onClick(() => { this.selectedTab = '题库' })
         NavItem({ isSelected: this.selectedTab === '错题', icon: $r('app.media.icon_mistake'), label: '错题' })
-          .layoutWeight(1).onClick(() => { this.selectedTab = '错题' })
+          .onClick(() => { this.selectedTab = '错题' })
         NavItem({ isSelected: this.selectedTab === '报告', icon: $r('app.media.icon_report'), label: '报告' })
-          .layoutWeight(1).onClick(() => { this.selectedTab = '报告' })
+          .onClick(() => { this.selectedTab = '报告' })
         NavItem({ isSelected: this.selectedTab === '我的', icon: $r('app.media.icon_profile'), label: '我的' })
-          .layoutWeight(1).onClick(() => { this.selectedTab = '我的' })
+          .onClick(() => { this.selectedTab = '我的' })
       }
-      .width('90%')
+      .width('100%')
       .height(64)
-      .padding({left: 8, right: 8}) // 调整内边距
+      // ✅ 核心修改：使用 justifyContent(FlexAlign.SpaceAround) 来实现完美的视觉均分
+      .justifyContent(FlexAlign.SpaceAround)
+      .border({ width: { top: 1 }, color: '#EAEAEA' })
       .backgroundColor(Color.White)
-      .borderRadius(32)
-      .shadow({ radius: 15, color: '#2A000000', offsetY: 5 })
-      .margin({ bottom: 34 }) // 使用margin来制造与屏幕安全区的间距
+      // 使用 padding 和 env 变量来适配底部安全区域
+      .padding({ bottom: 'env(safe-area-inset-bottom)' })
 
     }
     .width('100%').height('100%')
+    .backgroundColor('#F4F6F8')
   }
 }
