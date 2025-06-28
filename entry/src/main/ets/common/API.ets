@@ -6,6 +6,16 @@ export interface GenerateQuestionDto {
   questionNum: number;
   difficulty: string;
   generateId: string;
+  category?: string;
+}
+
+export interface QuizSet {
+  id: number;
+  generateId: string;
+  title: string;
+  category: string;
+  totalQuestions: number;
+  createdAt: string; // 后端的LocalDateTime通常会序列化为ISO格式的字符串
 }
 
 interface ChatRequestBody {
@@ -21,6 +31,13 @@ export function submitGenerationTask(params: GenerateQuestionDto): Promise<ApiRe
   return post<string>('/question/asyncGenerateQuestion', params);
 }
 
+export function createQuizSet(params: GenerateQuestionDto): Promise<ApiResponse<QuizSet>> {
+  return post<QuizSet>('/quiz-bank/sets', params);
+}
+
+export function getQuizSets(): Promise<ApiResponse<QuizSet[]>> {
+  return get<QuizSet[]>('/quiz-bank/sets');
+}
 /**
  * 根据批次ID查询已生成的题目列表
  * @param generateId 批次ID

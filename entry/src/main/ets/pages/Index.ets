@@ -2,7 +2,7 @@ import { promptAction } from '@kit.ArkUI';
 import router from '@ohos.router';
 import { QuestionModel } from '../model/QuestionModel';
 import UUID from '@kingtous/uuid';
-import { submitGenerationTask, getQuestionsByBatchId, GenerateQuestionDto } from '../common/API';
+import { submitGenerationTask, getQuestionsByBatchId, GenerateQuestionDto, createQuizSet } from '../common/API';
 import { ApiResponse } from '../utls/HttpClient';
 
 const BATCH_SIZE = 15; // 每个并行请求的题目数量
@@ -78,7 +78,16 @@ struct Index {
 
     try {
       await Promise.all(requestPromises);
-      promptAction.showToast({ message: `所有任务已提交，开始获取结果...` });
+      promptAction.showToast({ message: `所有任务已提交，AI正在生成...` });
+      const quizSetParams: GenerateQuestionDto = {
+        generateId: batchId,
+        question: this.currentTopic,       // 作为大分类
+        category: this.currentTopic,       // 作为小分类/标题
+        questionNum: totalQuestions,
+        difficulty: this.selectedDifficulty,
+      };
+      await createQuizSet(quizSetParams);
+
       this.startPolling(batchId, totalQuestions);
     } catch (error) {
       this.handleError((error as Error).message);
@@ -255,7 +264,8 @@ struct Index {
         NavItem({ isSelected: this.selectedTab === '首页', icon: $r('app.media.icon_home'), label: '首页' })
           .onClick(() => { this.selectedTab = '首页' })
         NavItem({ isSelected: this.selectedTab === '题库', icon: $r('app.media.icon_quiz'), label: '题库' })
-          .onClick(() => { this.selectedTab = '题库' })
+          .onClick(() => { this.selectedTab = '题库';
+            router.pushUrl({url:'pages/QuizBankPage'});})
         NavItem({ isSelected: this.selectedTab === '错题', icon: $r('app.media.icon_mistake'), label: '错题' })
           .onClick(() => { this.selectedTab = '错题' })
         NavItem({ isSelected: this.selectedTab === '报告', icon: $r('app.media.icon_report'), label: '报告' })
