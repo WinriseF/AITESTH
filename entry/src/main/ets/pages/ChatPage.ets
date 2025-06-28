@@ -1,6 +1,6 @@
 import router from '@ohos.router';
 import { promptAction } from '@kit.ArkUI';
-import { simpleChat } from '../utls/HttpClient'; // 导入新的simpleChat方法
+import { simpleChat } from '../utls/HttpClient';
 
 // 定义单条聊天消息的数据模型
 interface ChatMessage {
@@ -23,35 +23,35 @@ struct ChatPage {
     setTimeout(() => { this.listScroller.scrollEdge(Edge.Bottom); }, 100);
   }
 
+  /**
+   * 一个用于模拟“打字”效果的函数
+   * @param botMessageIndex 正在更新的机器人消息在数组中的索引
+   * @param fullText AI返回的完整文本
+   */
   simulateStreaming(botMessageIndex: number, fullText: string) {
+    const characters = Array.from(fullText);
     let currentIndex = 0;
-    // 先清除占位符 "..."
+
+    this.messages[botMessageIndex].isStreaming = true;
     this.messages[botMessageIndex].text = '';
 
     const intervalId = setInterval(() => {
-      // 如果所有字符都已显示
-      if (currentIndex >= fullText.length) {
-        clearInterval(intervalId); // 停止计时器
-        this.messages[botMessageIndex].isStreaming = false; // 隐藏加载动画
-        this.isSending = false; // 允许用户发送下一条消息
-        // 最后再触发一次UI刷新，确保动画消失
+      if (currentIndex >= characters.length) {
+        clearInterval(intervalId);
+        this.messages[botMessageIndex].isStreaming = false;
+        this.isSending = false;
         this.messages = [...this.messages];
         return;
       }
 
-      // 追加下一个字符
-      this.messages[botMessageIndex].text += fullText[currentIndex];
-      // 创建数组的浅拷贝，以最可靠的方式通知UI进行刷新
+      this.messages[botMessageIndex].text += characters[currentIndex];
       this.messages = [...this.messages];
 
       this.scrollToBottom();
       currentIndex++;
-    }, 10); // 打字速度，单位毫秒，可以调整
+    }, 5); // 打字速度，单位毫秒
   }
 
-  /**
-   * 【重构后】的 sendMessage 方法
-   */
   async sendMessage() {
     const userText = this.inputText.trim();
     if (!userText || this.isSending) return;
@@ -59,30 +59,25 @@ struct ChatPage {
     this.isSending = true;
     this.inputText = '';
 
-    // 1. 添加用户消息
     this.messages.push({ id: this.messages.length, text: userText, sender: 'user' });
     this.scrollToBottom();
 
-    // 2. 添加带加载动画的占位符
     const botMessageIndex = this.messages.length;
-    this.messages.push({ id: botMessageIndex, text: '正在思考...', sender: 'bot', isStreaming: true });
+    this.messages.push({ id: botMessageIndex, text: '正在思考...', sender: 'bot', isStreaming: false });
     this.scrollToBottom();
 
     try {
-      // 3. 一次性获取完整的AI回复
+      // 一次性获取完整的AI回复
       const aiResponse = await simpleChat(userText);
-
-      // 4. 【关键】使用完整的回复来启动模拟打字效果
-      this.simulateStreaming(botMessageIndex, aiResponse);
+      // 使用完整的回复来启动模拟打字效果
+      this.simulateStreaming(botMessageIndex, aiResponse.trim());
 
     } catch (error) {
       const err = error as Error;
       promptAction.showToast({ message: `请求失败: ${err.message}` });
-      // 从数组中移除失败的占位符
       this.messages = this.messages.filter((_, index) => index !== botMessageIndex);
-      this.isSending = false; // 出错时也要重置发送状态
+      this.isSending = false;
     }
-    // 注意：这里的 finally 块被移除了，因为 isSending 状态由 simulateStreaming 和 catch 块管理
   }
 
   build() {
@@ -106,7 +101,7 @@ struct ChatPage {
           ListItem() {
             Row() {
               if (message.sender === 'bot') {
-                Image($r('app.media.chat')) // 假设您有AI头像资源
+                Image($r('app.media.chat'))
                   .width(36).height(36).borderRadius(18).margin({ right: 8 })
               }
               if (message.sender === 'user') {
@@ -117,10 +112,10 @@ struct ChatPage {
                   .fontSize(16)
                   .fontColor(message.sender === 'user' ? Color.White : Color.Black)
                 // “正在输入”的光标动画
-                if (message.isStreaming) {
-                  Text().width(3).height(16).backgroundColor(Color.Black).margin({ left: 4 })
-                    .animation({ iterations: -1, duration: 1000, curve: Curve.EaseInOut })
-                }
+                // if (message.isStreaming) {
+                //   Text().width(3).height(16).backgroundColor(Color.Black).margin({ left: 4 })
+                //     .animation({ iterations: -1, duration: 1000, curve: Curve.EaseInOut })
+                // }
               }
               .padding({ top: 10, bottom: 10, left: 14, right: 14 })
               .backgroundColor(message.sender === 'user' ? '#6A67EA' : '#F0F2F5')
@@ -132,9 +127,9 @@ struct ChatPage {
               }
             }
             .width('100%').padding({ top: 10, bottom: 10 })
+            .alignItems(VerticalAlign.Top)
           }
         },
-          // 使用 消息ID + 消息文本 作为唯一的key，强制UI在文本更新时重新渲染
           (item: ChatMessage) => `${item.id}-${item.text}`
         )
       }
