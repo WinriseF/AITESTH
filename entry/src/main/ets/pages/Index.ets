@@ -1,11 +1,9 @@
 import { promptAction } from '@kit.ArkUI';
 import http from '@ohos.net.http';
-import { BusinessError } from '@kit.BasicServicesKit';
 import router from '@ohos.router';
 import { QuestionModel } from '../model/QuestionModel';
-import UUID from '@kingtous/uuid'; // 引入UUID库来生成批次ID
+import UUID from '@kingtous/uuid';
 
-// --- 配置区域 ---
 const API_BASE_URL = 'http://192.168.31.202:8080'; // 已根据您的日志填入IP
 const BATCH_SIZE = 15; // 定义每个并行请求的题目数量
 
@@ -20,11 +18,11 @@ interface GenerateQuestionDto {
   question: string;
   questionNum: number;
   difficulty: string;
-  generateId: string; // 新增批次ID字段
+  generateId: string;
 }
 
-@Styles function aitesCardStyle() { /* ... 样式代码省略 ... */ .backgroundColor(Color.White).borderRadius(24).padding(20).shadow({ radius: 20, color: '#1A000000', offsetX: 0, offsetY: 4 })}
-@Component struct NavItem { /* ... NavItem组件代码省略 ... */ @Prop isSelected: boolean = false; label: string = ''; icon: Resource = $r('app.media.icon_home'); build() { Column({ space: 4 }) { Image(this.icon) .width(24).height(24) .fillColor(this.isSelected ? '#6A67EA' : '#888888'); Text(this.label) .fontSize(10) .fontWeight(this.isSelected ? FontWeight.Medium : FontWeight.Normal) .fontColor(this.isSelected ? '#6A67EA' : '#888888') }.padding({ top: 8, bottom: 8 }).justifyContent(FlexAlign.Center) } }
+@Styles function aitesCardStyle() { .backgroundColor(Color.White).borderRadius(24).padding(20).shadow({ radius: 20, color: '#1A000000', offsetX: 0, offsetY: 4 })}
+@Component struct NavItem { @Prop isSelected: boolean = false; label: string = ''; icon: Resource = $r('app.media.icon_home'); build() { Column({ space: 4 }) { Image(this.icon) .width(24).height(24) .fillColor(this.isSelected ? '#6A67EA' : '#888888'); Text(this.label) .fontSize(10) .fontWeight(this.isSelected ? FontWeight.Medium : FontWeight.Normal) .fontColor(this.isSelected ? '#6A67EA' : '#888888') }.padding({ top: 8, bottom: 8 }).justifyContent(FlexAlign.Center) } }
 
 @Entry
 @Component
@@ -37,13 +35,12 @@ struct Index {
   private pollIntervalId: number = -1;
 
   /**
-   * 【重构】处理开始测验的逻辑，支持任务拆分和并行
+   * 处理开始测验的逻辑，支持任务拆分和并行
    */
   async handleStartQuiz() {
     this.isLoading = true;
     promptAction.showToast({ message: `正在提交生成任务...` });
 
-    // 1. 为本次所有请求生成一个统一的批次ID
     const batchId = UUID.v4();
     const totalQuestions = this.questionCount;
     let remainingQuestions = totalQuestions;
@@ -52,7 +49,7 @@ struct Index {
 
     console.info(`[AITEST] 总任务开始，ID: ${batchId}, 总数: ${totalQuestions}`);
 
-    // 2. 将总数拆分为多个小任务
+    // 将总数拆分为多个小任务
     while (remainingQuestions > 0) {
       const currentBatchSize = Math.min(remainingQuestions, BATCH_SIZE);
       const params: GenerateQuestionDto = {
@@ -61,7 +58,7 @@ struct Index {
         difficulty: this.selectedDifficulty,
         generateId: batchId // 所有请求都使用同一个批次ID
       };
-      // 3. 为每个小任务创建一个异步请求的Promise
+      // 为每个小任务创建一个异步请求的Promise
       requestPromises.push(this.submitGenerationTask(params));
       remainingQuestions -= currentBatchSize;
     }
@@ -78,7 +75,7 @@ struct Index {
   }
 
   /**
-   * 【新增】封装的单个生成任务的提交函数
+   * 封装的单个生成任务的提交函数
    * @param params 请求参数
    * @returns 一个Promise，成功或失败
    */
@@ -111,7 +108,7 @@ struct Index {
 
 
   /**
-   * 【重构】轮询获取结果，增加期望数量的判断
+   * 轮询获取结果，增加期望数量的判断
    * @param generateId 批次ID
    * @param expectedCount 期望得到的题目总数
    */
@@ -128,7 +125,6 @@ struct Index {
         if (response.responseCode === 200) {
           const resultJson: ApiResponse<QuestionModel[]> = JSON.parse(response.result as string);
           if (resultJson.code === 200 && resultJson.data) {
-            // 【关键修改】判断当前获取的数量是否已达到期望值
             if (resultJson.data.length >= expectedCount) {
               this.handleSuccess(resultJson.data);
             } else {
@@ -137,11 +133,10 @@ struct Index {
           }
         }
       } catch (err) {
-        // ...
       } finally {
         httpRequest.destroy();
       }
-    }, 5000); // 轮询间隔可以适当延长到5秒
+    }, 8000); // 轮询间隔可以适当延长
 
     setTimeout(() => {
       if (this.isLoading) {
@@ -174,7 +169,6 @@ struct Index {
     console.error(`[AITEST] 最终错误信息: ${errorMessage}`);
   }
 
-  // UI build() 方法保持不变，因此省略...
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {

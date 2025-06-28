@@ -1,7 +1,5 @@
-// 文件路径: src/main/ets/pages/QuizPage.ets
-
 import router from '@ohos.router';
-import { promptAction } from '@kit.ArkUI'; // 使用 promptAction 替代 prompt
+import { promptAction } from '@kit.ArkUI';
 import { QuestionModel } from '../model/QuestionModel';
 
 // 为路由参数定义一个明确的接口
@@ -149,16 +147,15 @@ struct QuizPage {
         Text(this.questions[this.currentIndex].question ?? '题目加载中...')
           .fontSize(20).fontWeight(FontWeight.Bold).width('100%').textAlign(TextAlign.Start)
 
-        // 使用ForEach来渲染选项，确保UI正确更新
         ForEach(
-          // 1. 为当前题目动态创建选项数组
+          // 为当前题目动态创建选项数组
           [
             { label: 'A', text: this.questions[this.currentIndex].optionA ?? '' },
             { label: 'B', text: this.questions[this.currentIndex].optionB ?? '' },
             { label: 'C', text: this.questions[this.currentIndex].optionC ?? '' },
             { label: 'D', text: this.questions[this.currentIndex].optionD ?? '' }
           ],
-          // 2. 为每个选项创建一个OptionItem
+          // 为每个选项创建一个OptionItem
           (option: QuizOption) => {
             OptionItem({
               label: option.label,
@@ -169,7 +166,7 @@ struct QuizPage {
             })
               .onClick(() => { if (!this.showAnswer) this.selectedOption = option.label })
           },
-          // 3. 【关键修复】提供一个在不同题目间也唯一的key
+          // 提供一个在不同题目间也唯一的key
           (option: QuizOption) => `${this.currentIndex}-${option.label}`
         )
 
@@ -186,7 +183,7 @@ struct QuizPage {
 
         Button(this.showAnswer ? `下一题 (${this.currentIndex + 1}/${this.questions.length})` : '确认答案')
           .width('100%').height(50).fontSize(16).fontWeight(FontWeight.Bold)
-          .backgroundColor('#6A67EA').margin({ top: 20 }) // 统一品牌色
+          .backgroundColor('#6A67EA').margin({ top: 20 })
           .onClick(() => {
             this.showAnswer ? this.nextQuestion() : this.checkAnswer()
           })

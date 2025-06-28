@@ -1,6 +1,6 @@
 import { QuestionModel } from "../model/QuestionModel";
 import { getNormal, postNormal } from "../utls/HttpClient";
-import { Result } from "../model/Result"; // 假设您会将 Result 定义在一个单独的模型文件中
+import { Result } from "../model/Result";
 
 export class GenerateQuestionDto {
   question?: string;
