@@ -10,48 +10,40 @@ export interface ApiResponse<T> {
   message: string;
   data: T;
 }
-export interface StreamCallbacks {
-  onData: (dataChunk: string) => void;
-  onClose: () => void;
-  onError: (error: Error) => void;
-}
 
-export function getStream(path: string, callbacks: StreamCallbacks): void {
+/**
+ * @param msg 用户的聊天内容字符串
+ * @returns 返回一个 Promise，其值为AI的完整回复字符串
+ */
+export function simpleChat(msg: string): Promise<string> {
+  // 对消息进行URL编码，以防包含特殊字符（如&, ?, 空格等）
+  const encodedMsg = encodeURIComponent(msg);
+  const path = `/chat/chat?msg=${encodedMsg}`;
   const url = `${API_BASE_URL}${path}`;
+
   let httpRequest = http.createHttp();
-  const decoder = new util.TextDecoder('utf-8');
 
-  // 监听数据接收事件
-  httpRequest.on('dataReceive', (chunk) => {
-    try {
-      const textChunk = decoder.decodeWithStream(new Uint8Array(chunk));
-      callbacks.onData(textChunk);
-    } catch (e) {
-      callbacks.onError(e as Error);
+  return httpRequest.request(url, {
+    method: http.RequestMethod.GET, // 这是一个GET请求
+    connectTimeout: 30000, // 30秒超时
+    readTimeout: 30000,
+  }).then(response => {
+    // 销毁请求，释放资源
+    httpRequest.destroy();
+
+    if (response.responseCode >= 200 && response.responseCode < 300) {
+      // 请求成功，直接返回结果字符串
+      return response.result as string;
+    } else {
+      // HTTP层面失败，抛出错误
+      throw new Error(`HTTP Error: ${response.responseCode}`);
     }
+  }).catch((err: BusinessError | Error) => {
+    // 创建一个新的、类型确定的 Error 对象
+    throw new Error(err.message || '网络请求发生未知错误');
+  }).finally(() => {
+    httpRequest.destroy();
   });
-
-  // 监听请求头接收事件
-  httpRequest.on('headersReceive', () => {
-    console.info(`[HttpClient-Stream] Headers received.`);
-  });
-
-  // 发起请求并处理最终结果
-  httpRequest.request(url, { method: http.RequestMethod.GET })
-    .then(response => {
-      console.info(`[HttpClient-Stream] Stream request completed with code: ${response.responseCode}`);
-      if (response.responseCode >= 200 && response.responseCode < 300) {
-        callbacks.onClose(); // 只有成功时才调用onClose
-      } else {
-        callbacks.onError(new Error(`HTTP Error: ${response.responseCode}`));
-      }
-    })
-    .catch((err: BusinessError | Error) => {
-      callbacks.onError(err as Error); // 捕获网络层面的错误
-    })
-    .finally(() => {
-      httpRequest.destroy();
-    });
 }
 
 /**

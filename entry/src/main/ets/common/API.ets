@@ -1,6 +1,6 @@
 // 文件路径: src/main/ets/common/API.ts
 
-import { get, post, ApiResponse, getStream, StreamCallbacks } from '../utls/HttpClient';
+import { get, post, ApiResponse } from '../utls/HttpClient';
 import { QuestionModel } from '../model/QuestionModel';
 
 export interface GenerateQuestionDto {
@@ -26,10 +26,4 @@ export function submitGenerationTask(params: GenerateQuestionDto): Promise<ApiRe
  */
 export function getQuestionsByBatchId(generateId: string): Promise<ApiResponse<QuestionModel[]>> {
   return get<QuestionModel[]>(`/question/question/${generateId}`);
-}
-
-export function streamChat(msg: string, callbacks: StreamCallbacks): void {
-  const path = `/chat/streamChat?msg=${encodeURIComponent(msg)}`;
-  // 调用HttpClient中新增的getStream方法
-  getStream(path, callbacks);
 }

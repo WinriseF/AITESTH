@@ -1,7 +1,6 @@
 import router from '@ohos.router';
 import { promptAction } from '@kit.ArkUI';
-import { streamChat } from '../common/API';
-import { BusinessError } from '@kit.BasicServicesKit';
+import { simpleChat } from '../utls/HttpClient'; // 导入新的simpleChat方法
 
 // 定义单条聊天消息的数据模型
 interface ChatMessage {
@@ -19,14 +18,12 @@ struct ChatPage {
   @State isSending: boolean = false;
   private listScroller: Scroller = new Scroller();
 
+  // 平滑滚动到底部
   scrollToBottom() {
     setTimeout(() => { this.listScroller.scrollEdge(Edge.Bottom); }, 100);
   }
 
-  /**
-   * sendMessage函数现在非常简洁清晰
-   */
-  sendMessage() {
+  async sendMessage() {
     const userText = this.inputText.trim();
     if (!userText || this.isSending) return;
 
@@ -37,50 +34,37 @@ struct ChatPage {
     this.messages.push({ id: this.messages.length, text: userText, sender: 'user' });
     this.scrollToBottom();
 
-    // 2. 添加机器人消息占位符
+    // 2. 添加占位符
     const botMessageIndex = this.messages.length;
-    this.messages.push({ id: botMessageIndex, text: '', sender: 'bot', isStreaming: true });
+    this.messages.push({ id: botMessageIndex, text: '正在思考...', sender: 'bot', isStreaming: true });
     this.scrollToBottom();
 
-    // 3. 调用封装好的API，并传入回调函数来处理流式数据
-    streamChat(userText, {
-      onData: (textChunk) => {
-        // 【关键修复】使用 .map 来创建一个全新的数组和全新的消息对象，确保UI能够检测到变化
-        this.messages = this.messages.map((msg, index) => {
-          // 只更新当前正在流式输出的机器人消息
-          if (index === botMessageIndex) {
-            // 返回一个带有更新后文本的新对象
-            return {
-              id: msg.id,
-              text: msg.text + textChunk,
-              sender: msg.sender,
-              isStreaming: msg.isStreaming
-            };
-          }
-          // 其他消息保持原样
-          return msg;
-        });
-        this.scrollToBottom();
-      },
-      onClose: () => {
-        this.isSending = false;
-        const botMessage = this.messages[botMessageIndex];
-        if (botMessage) {
-          botMessage.isStreaming = false; // 结束加载动画
-          this.messages = [...this.messages];
+    try {
+      const aiResponse = await simpleChat(userText);
+
+      this.messages = this.messages.map((msg, index) => {
+        if (index === botMessageIndex) {
+          // 返回一个带有AI回复的、全新的消息对象
+          return {
+            id: msg.id,
+            text: aiResponse,
+            sender: 'bot',
+            isStreaming: false
+          };
         }
-        console.info('[ChatPage] Stream closed successfully.');
-      },
-      onError: (error) => {
-        this.isSending = false;
-        promptAction.showToast({ message: `聊天请求失败: ${error.message}` });
-        // 发生错误时，移除机器人的占位消息气泡
-        const botMessage = this.messages[botMessageIndex];
-        if (botMessage && botMessage.isStreaming) {
-          this.messages.pop();
-        }
-      }
-    });
+        // 其他消息保持原样
+        return msg;
+      });
+
+    } catch (error) {
+      const err = error as Error;
+      promptAction.showToast({ message: `请求失败: ${err.message}` });
+      // 从数组中移除失败的占位符
+      this.messages = this.messages.filter((_, index) => index !== botMessageIndex);
+    } finally {
+      this.isSending = false;
+      this.scrollToBottom();
+    }
   }
 
   build() {
@@ -104,7 +88,7 @@ struct ChatPage {
           ListItem() {
             Row() {
               if (message.sender === 'bot') {
-                Image($r('app.media.chat')) // 假设您有AI头像资源
+                Image($r('app.media.chat'))
                   .width(36).height(36).borderRadius(18).margin({ right: 8 })
               }
               if (message.sender === 'user') {
@@ -114,6 +98,7 @@ struct ChatPage {
                 Text(message.text)
                   .fontSize(16)
                   .fontColor(message.sender === 'user' ? Color.White : Color.Black)
+                // “正在输入”的光标动画
                 if (message.isStreaming) {
                   Text().width(3).height(16).backgroundColor(Color.Black).margin({ left: 4 })
                     .animation({ iterations: -1, duration: 1000, curve: Curve.EaseInOut })
@@ -124,13 +109,16 @@ struct ChatPage {
               .borderRadius(12)
               .constraintSize({ maxWidth: '80%' })
               if (message.sender === 'user') {
-                Image($r('app.media.icon_profile')) // 假设您有用户头像资源
+                Image($r('app.media.icon_profile'))
                   .width(36).height(36).borderRadius(18).margin({ left: 8 })
               }
             }
             .width('100%').padding({ top: 10, bottom: 10 })
           }
-        }, (item: ChatMessage) => item.id.toString())
+        },
+          // 使用 消息ID + 消息文本 作为唯一的key，强制UI在文本更新时重新渲染
+          (item: ChatMessage) => `${item.id}-${item.text}`
+        )
       }
       .layoutWeight(1).padding({ left: 16, right: 16 })
       .edgeEffect(EdgeEffect.None)
@@ -149,7 +137,7 @@ struct ChatPage {
           Image($r('app.media.send')).width(24).height(24).fillColor(Color.White)
         }
         .width(48).height(48).type(ButtonType.Circle)
-        .backgroundColor('#6A67EA')
+        .backgroundColor(this.isSending ? Color.Gray : '#6A67EA') // 发送中按钮变灰
         .enabled(!this.isSending)
         .onClick(() => this.sendMessage())
       }
