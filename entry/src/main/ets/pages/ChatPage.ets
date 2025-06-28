@@ -23,6 +23,35 @@ struct ChatPage {
     setTimeout(() => { this.listScroller.scrollEdge(Edge.Bottom); }, 100);
   }
 
+  simulateStreaming(botMessageIndex: number, fullText: string) {
+    let currentIndex = 0;
+    // 先清除占位符 "..."
+    this.messages[botMessageIndex].text = '';
+
+    const intervalId = setInterval(() => {
+      // 如果所有字符都已显示
+      if (currentIndex >= fullText.length) {
+        clearInterval(intervalId); // 停止计时器
+        this.messages[botMessageIndex].isStreaming = false; // 隐藏加载动画
+        this.isSending = false; // 允许用户发送下一条消息
+        // 最后再触发一次UI刷新，确保动画消失
+        this.messages = [...this.messages];
+        return;
+      }
+
+      // 追加下一个字符
+      this.messages[botMessageIndex].text += fullText[currentIndex];
+      // 创建数组的浅拷贝，以最可靠的方式通知UI进行刷新
+      this.messages = [...this.messages];
+
+      this.scrollToBottom();
+      currentIndex++;
+    }, 10); // 打字速度，单位毫秒，可以调整
+  }
+
+  /**
+   * 【重构后】的 sendMessage 方法
+   */
   async sendMessage() {
     const userText = this.inputText.trim();
     if (!userText || this.isSending) return;
@@ -34,37 +63,26 @@ struct ChatPage {
     this.messages.push({ id: this.messages.length, text: userText, sender: 'user' });
     this.scrollToBottom();
 
-    // 2. 添加占位符
+    // 2. 添加带加载动画的占位符
     const botMessageIndex = this.messages.length;
     this.messages.push({ id: botMessageIndex, text: '正在思考...', sender: 'bot', isStreaming: true });
     this.scrollToBottom();
 
     try {
+      // 3. 一次性获取完整的AI回复
       const aiResponse = await simpleChat(userText);
 
-      this.messages = this.messages.map((msg, index) => {
-        if (index === botMessageIndex) {
-          // 返回一个带有AI回复的、全新的消息对象
-          return {
-            id: msg.id,
-            text: aiResponse,
-            sender: 'bot',
-            isStreaming: false
-          };
-        }
-        // 其他消息保持原样
-        return msg;
-      });
+      // 4. 【关键】使用完整的回复来启动模拟打字效果
+      this.simulateStreaming(botMessageIndex, aiResponse);
 
     } catch (error) {
       const err = error as Error;
       promptAction.showToast({ message: `请求失败: ${err.message}` });
       // 从数组中移除失败的占位符
       this.messages = this.messages.filter((_, index) => index !== botMessageIndex);
-    } finally {
-      this.isSending = false;
-      this.scrollToBottom();
+      this.isSending = false; // 出错时也要重置发送状态
     }
+    // 注意：这里的 finally 块被移除了，因为 isSending 状态由 simulateStreaming 和 catch 块管理
   }
 
   build() {
@@ -88,7 +106,7 @@ struct ChatPage {
           ListItem() {
             Row() {
               if (message.sender === 'bot') {
-                Image($r('app.media.chat'))
+                Image($r('app.media.chat')) // 假设您有AI头像资源
                   .width(36).height(36).borderRadius(18).margin({ right: 8 })
               }
               if (message.sender === 'user') {
@@ -109,7 +127,7 @@ struct ChatPage {
               .borderRadius(12)
               .constraintSize({ maxWidth: '80%' })
               if (message.sender === 'user') {
-                Image($r('app.media.icon_profile'))
+                Image($r('app.media.icon_profile')) // 假设您有用户头像资源
                   .width(36).height(36).borderRadius(18).margin({ left: 8 })
               }
             }
