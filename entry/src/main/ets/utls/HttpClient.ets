@@ -15,35 +15,33 @@ export interface ApiResponse<T> {
  * @param msg 用户的聊天内容字符串
  * @returns 返回一个 Promise，其值为AI的完整回复字符串
  */
-export function simpleChat(msg: string): Promise<string> {
-  // 对消息进行URL编码，以防包含特殊字符（如&, ?, 空格等）
-  const encodedMsg = encodeURIComponent(msg);
-  const path = `/chat/chat?msg=${encodedMsg}`;
+export async function postSimple(path: string, data: object): Promise<string> {
   const url = `${API_BASE_URL}${path}`;
-
   let httpRequest = http.createHttp();
+  try {
+    console.info(`[HttpClient] POSTing to: ${url}`);
+    const response = await httpRequest.request(url, {
+      method: http.RequestMethod.POST,
+      header: {
+        'Content-Type': 'application/json'
+      },
+      extraData: JSON.stringify(data),
+      // 为长文本处理和AI响应增加超时时间
+      connectTimeout: 60000,
+      readTimeout: 120000,
+    });
 
-  return httpRequest.request(url, {
-    method: http.RequestMethod.GET, // 这是一个GET请求
-    connectTimeout: 30000, // 30秒超时
-    readTimeout: 30000,
-  }).then(response => {
-    // 销毁请求，释放资源
-    httpRequest.destroy();
-
-    if (response.responseCode >= 200 && response.responseCode < 300) {
-      // 请求成功，直接返回结果字符串
+    if (response.responseCode === 200) {
       return response.result as string;
     } else {
-      // HTTP层面失败，抛出错误
-      throw new Error(`HTTP Error: ${response.responseCode}`);
+      throw new Error(`HTTP 错误，状态码: ${response.responseCode}`);
     }
-  }).catch((err: BusinessError | Error) => {
-    // 创建一个新的、类型确定的 Error 对象
-    throw new Error(err.message || '网络请求发生未知错误');
-  }).finally(() => {
+  } catch (err) {
+    const error = err as BusinessError | Error;
+    throw new Error(error.message || '未知网络错误');
+  } finally {
     httpRequest.destroy();
-  });
+  }
 }
 
 /**

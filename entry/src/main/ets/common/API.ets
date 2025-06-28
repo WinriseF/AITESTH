@@ -1,6 +1,4 @@
-// 文件路径: src/main/ets/common/API.ts
-
-import { get, post, ApiResponse } from '../utls/HttpClient';
+import { get, post, ApiResponse, postSimple } from '../utls/HttpClient';
 import { QuestionModel } from '../model/QuestionModel';
 
 export interface GenerateQuestionDto {
@@ -8,6 +6,10 @@ export interface GenerateQuestionDto {
   questionNum: number;
   difficulty: string;
   generateId: string;
+}
+
+interface ChatRequestBody {
+  msg: string;
 }
 
 /**
@@ -26,4 +28,9 @@ export function submitGenerationTask(params: GenerateQuestionDto): Promise<ApiRe
  */
 export function getQuestionsByBatchId(generateId: string): Promise<ApiResponse<QuestionModel[]>> {
   return get<QuestionModel[]>(`/question/question/${generateId}`);
+}
+
+export function simpleChat(message: string): Promise<string> {
+  const requestBody: ChatRequestBody = { msg: message };
+  return postSimple('/chat/simpleChat', requestBody);
 }

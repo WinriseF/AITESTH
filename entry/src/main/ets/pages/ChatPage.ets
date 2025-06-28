@@ -1,6 +1,6 @@
 import router from '@ohos.router';
 import { promptAction } from '@kit.ArkUI';
-import { simpleChat } from '../utls/HttpClient';
+import { simpleChat } from "../common/API"
 
 // 定义单条聊天消息的数据模型
 interface ChatMessage {
@@ -111,18 +111,13 @@ struct ChatPage {
                 Text(message.text)
                   .fontSize(16)
                   .fontColor(message.sender === 'user' ? Color.White : Color.Black)
-                // “正在输入”的光标动画
-                // if (message.isStreaming) {
-                //   Text().width(3).height(16).backgroundColor(Color.Black).margin({ left: 4 })
-                //     .animation({ iterations: -1, duration: 1000, curve: Curve.EaseInOut })
-                // }
               }
               .padding({ top: 10, bottom: 10, left: 14, right: 14 })
               .backgroundColor(message.sender === 'user' ? '#6A67EA' : '#F0F2F5')
               .borderRadius(12)
               .constraintSize({ maxWidth: '80%' })
               if (message.sender === 'user') {
-                Image($r('app.media.icon_profile')) // 假设您有用户头像资源
+                Image($r('app.media.icon_profile'))
                   .width(36).height(36).borderRadius(18).margin({ left: 8 })
               }
             }
@@ -150,7 +145,7 @@ struct ChatPage {
           Image($r('app.media.send')).width(24).height(24).fillColor(Color.White)
         }
         .width(48).height(48).type(ButtonType.Circle)
-        .backgroundColor(this.isSending ? Color.Gray : '#6A67EA') // 发送中按钮变灰
+        .backgroundColor(this.isSending ? Color.Gray : '#6A67EA')
         .enabled(!this.isSending)
         .onClick(() => this.sendMessage())
       }
