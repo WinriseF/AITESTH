@@ -1,77 +1,87 @@
-import { http } from '@kit.NetworkKit';
-import { Result } from '../model/Result';
+import http from '@ohos.net.http';
+import { BusinessError } from '@kit.BasicServicesKit';
 
-const HOST = "http://192.168.31.202:8080/"
+const API_BASE_URL = 'http://172.27.20.121:8080';
 
-export async function request(url:string,method:http.RequestMethod = http.RequestMethod.GET,params?:object,header?:object):Promise<http.HttpResponse> {
-  // 先检查一下当前的url中是否包含了HOST
-  if (url.indexOf(HOST) == -1){
-    url = HOST + url;
-  }
-  // 如果是get请求，并且携带参数，就需要将参数拼接到url后面
-  if (method == http.RequestMethod.GET && params){
-    let keys = Object.keys(params) // 取出params对象的所有属性名
-    url += "?" + keys.map(key=>{
-      let value = params[key] as object
-      if (value){ // 该属性有值
-        return key + "=" + value
+// 定义通用的API响应结构，方便在整个应用中复用
+export interface ApiResponse<T> {
+  code: number;
+  message: string;
+  data: T;
+}
+
+/**
+ * 封装一个通用的请求函数，作为所有请求的核心
+ * @param path API的相对路径, e.g., "/question/asyncGenerateQuestion"
+ * @param options http请求的配置
+ * @returns 返回一个 Promise，其值为解析后的业务数据
+ */
+async function request<T>(path: string, options: http.HttpRequestOptions): Promise<ApiResponse<T>> {
+  const url = `${API_BASE_URL}${path}`;
+  let httpRequest = http.createHttp();
+
+  try {
+    console.log(`[HttpClient] Requesting: ${options.method} ${url}`);
+    if (options.extraData) {
+      const body_snippet = (options.extraData as string).substring(0, 200);
+      console.log(`[HttpClient] Body: ${body_snippet}...`);
+    }
+
+    const response = await httpRequest.request(url, options);
+
+    console.log(`[HttpClient] Response Code: ${response.responseCode}`);
+    console.log(`[HttpClient] Response Body: ${response.result}`);
+
+    if (response.responseCode >= 200 && response.responseCode < 300) {
+      // HTTP状态码成功
+      const resultJson = JSON.parse(response.result as string) as ApiResponse<T>;
+      // 检查后端返回的业务状态码
+      if (resultJson.code === 200) {
+        return resultJson;
       } else {
-        return ""
+        // 业务处理失败，抛出一个包含后端错误信息的Error
+        throw new Error(resultJson.message || '后端业务处理失败');
       }
-    }).join("&")
-  }
-  // 默认情况下如果不是get请求 那么请求参数都设置为json
-  if (header){
-    header = new Object()
-  }
-  if (method != http.RequestMethod.GET && header && !header['Content-Type']){
-    header['Content-Type'] = "application/json;charset=utf-8"
-  }
-  // 创建请求客户端
-  let httpClient = http.createHttp()
-  let options:http.HttpRequestOptions = {
-    method,
-    extraData:params,
-    header,
-    readTimeout:10000,
-    connectTimeout:10000
-  }
-  // 请求
-  let response = await httpClient.request(url,options)
-  // 关闭客户端
-  httpClient.destroy()
-  // 返回响应
-  return response;
-}
-
-export async function get(url:string,params?:object,header?:object):Promise<http.HttpResponse>{
-  return await request(url,http.RequestMethod.GET,params,header)
-}
-
-export async function post(url:string,params?:object,header?:object):Promise<http.HttpResponse>{
-  return await request(url,http.RequestMethod.POST,params,header)
-}
-
-export async function getNormal<T>(url:string,params?:object,header?:object):Promise<Result<T>>{
-  let response = await get(url,params,header)
-  return new Promise<Result<T>>((resolve,reject)=>{
-    if (response.responseCode == 200){
-      let body = JSON.parse(response.result as string) as Result<T>
-      resolve(body)
     } else {
-      reject(response.result)
+      // HTTP层面失败
+      throw new Error(`HTTP 错误，状态码: ${response.responseCode}`);
     }
-  })
+  } catch (err) {
+    const error = err as BusinessError | Error;
+    console.error(`[HttpClient] 请求 ${url} 发生严重错误: ${JSON.stringify(error)}`);
+    throw new Error(error.message || '发生未知网络错误，请检查网络连接或服务器状态');
+  } finally {
+    httpRequest.destroy();
+  }
 }
 
-export async function postNormal<T>(url:string,params?:object,header?:object):Promise<Result<T>>{
-  let response = await post(url,params,header)
-  return new Promise<Result<T>>((resolve,reject)=>{
-    if (response.responseCode == 200){
-      let body = JSON.parse(response.result as string) as Result<T>
-      resolve(body)
-    } else {
-      reject(response.result)
-    }
-  })
+/**
+ * 封装通用的POST请求方法
+ * @param path API的相对路径
+ * @param data 要发送的JS对象，会自动转换为JSON字符串
+ * @returns
+ */
+export function post<T>(path: string, data: object): Promise<ApiResponse<T>> {
+  return request<T>(path, {
+    method: http.RequestMethod.POST,
+    header: {
+      'Content-Type': 'application/json'
+    },
+    extraData: JSON.stringify(data),
+    connectTimeout: 15000, // 15秒连接超时
+    readTimeout: 15000,    // 15秒读取超时
+  });
+}
+
+/**
+ * 封装通用的GET请求方法
+ * @param path API的相对路径
+ * @returns
+ */
+export function get<T>(path: string): Promise<ApiResponse<T>> {
+  return request<T>(path, {
+    method: http.RequestMethod.GET,
+    connectTimeout: 15000,
+    readTimeout: 15000,
+  });
 }

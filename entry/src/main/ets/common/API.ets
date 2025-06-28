@@ -1,29 +1,29 @@
-import { QuestionModel } from "../model/QuestionModel";
-import { getNormal, postNormal } from "../utls/HttpClient";
-import { Result } from "../model/Result";
+// 文件路径: src/main/ets/common/API.ts
 
-export class GenerateQuestionDto {
-  question?: string;
-  questionNum?: number;
-  questionFormat?: string;
-  generateId?: string;
+import { get, post, ApiResponse } from '../utls/HttpClient';
+import { QuestionModel } from '../model/QuestionModel';
+
+export interface GenerateQuestionDto {
+  question: string;
+  questionNum: number;
+  difficulty: string;
+  generateId: string;
 }
 
 /**
- * 异步生成问题
- * @param generateQuestionDto 包含生成问题所需信息的DTO
- * @returns 返回一个包含生成ID的Result对象
+ * 提交一个题目生成的子任务
+ * @param params 包含题目主题、数量、难度和批次ID的参数对象
+ * @returns 一个Promise，其值为包含生成ID字符串的ApiResponse
  */
-export const asyncGenerateQuestion = (generateQuestionDto: GenerateQuestionDto) =>
-postNormal<Result<string>>(
-  "/question/asyncGenerateQuestion",
-  generateQuestionDto
-);
+export function submitGenerationTask(params: GenerateQuestionDto): Promise<ApiResponse<string>> {
+  return post<string>('/question/asyncGenerateQuestion', params);
+}
 
 /**
- * 根据生成ID查询问题
- * @param generateId 问题的生成ID
- * @returns 返回一个包含问题列表的Result对象
+ * 根据批次ID查询已生成的题目列表
+ * @param generateId 批次ID
+ * @returns 一个Promise，其值为包含题目数组的ApiResponse
  */
-export const selectQuestionByGenerateId = (generateId: string) =>
-getNormal<Result<QuestionModel[]>>("/question/question/" + generateId);
+export function getQuestionsByBatchId(generateId: string): Promise<ApiResponse<QuestionModel[]>> {
+  return get<QuestionModel[]>(`/question/question/${generateId}`);
+}
