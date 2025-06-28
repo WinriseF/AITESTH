@@ -1,5 +1,6 @@
 import http from '@ohos.net.http';
 import { BusinessError } from '@kit.BasicServicesKit';
+import util from '@ohos.util';
 
 const API_BASE_URL = 'http://172.27.20.121:8080';
 
@@ -8,6 +9,49 @@ export interface ApiResponse<T> {
   code: number;
   message: string;
   data: T;
+}
+export interface StreamCallbacks {
+  onData: (dataChunk: string) => void;
+  onClose: () => void;
+  onError: (error: Error) => void;
+}
+
+export function getStream(path: string, callbacks: StreamCallbacks): void {
+  const url = `${API_BASE_URL}${path}`;
+  let httpRequest = http.createHttp();
+  const decoder = new util.TextDecoder('utf-8');
+
+  // 监听数据接收事件
+  httpRequest.on('dataReceive', (chunk) => {
+    try {
+      const textChunk = decoder.decodeWithStream(new Uint8Array(chunk));
+      callbacks.onData(textChunk);
+    } catch (e) {
+      callbacks.onError(e as Error);
+    }
+  });
+
+  // 监听请求头接收事件
+  httpRequest.on('headersReceive', () => {
+    console.info(`[HttpClient-Stream] Headers received.`);
+  });
+
+  // 发起请求并处理最终结果
+  httpRequest.request(url, { method: http.RequestMethod.GET })
+    .then(response => {
+      console.info(`[HttpClient-Stream] Stream request completed with code: ${response.responseCode}`);
+      if (response.responseCode >= 200 && response.responseCode < 300) {
+        callbacks.onClose(); // 只有成功时才调用onClose
+      } else {
+        callbacks.onError(new Error(`HTTP Error: ${response.responseCode}`));
+      }
+    })
+    .catch((err: BusinessError | Error) => {
+      callbacks.onError(err as Error); // 捕获网络层面的错误
+    })
+    .finally(() => {
+      httpRequest.destroy();
+    });
 }
 
 /**

@@ -144,7 +144,13 @@ struct Index {
       Column() {
         // 1. 顶部栏
         Row() {
-          Text('logo').fontSize(24).fontWeight(FontWeight.Bold).fontColor('#6A67EA')
+          Image($r('app.media.chat'))
+            .width(28).height(28)
+            .fillColor('#6A67EA')
+            .onClick(() => {
+              // 点击时跳转到新的聊天页面
+              router.pushUrl({ url: 'pages/ChatPage' });
+            })
           Blank()
           Text(this.currentTopic).fontSize(18).fontWeight(FontWeight.Bold)
         }
