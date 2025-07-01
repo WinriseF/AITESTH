@@ -2,7 +2,8 @@
   "modelVersion": "5.0.5",
   "description": "Please describe the basic information.",
   "dependencies": {
-    "@kingtous/uuid": "^1.0.0"
+    "@kingtous/uuid": "^1.0.0",
+    "lightrefresh": "^1.0.3"
   },
   "devDependencies": {
     "@ohos/hypium": "1.0.21",

@@ -1,9 +1,7 @@
-// 文件路径: src/main/ets/pages/Index.ts
 // 这个文件现在是应用的主入口和容器
 
 import { HomePage } from './HomePage';
 import { QuizBankPage } from './QuizBankPage';
-import router from '@ohos.router';
 
 // 为导航栏项目定义一个明确的接口
 interface NavTabInfo {
@@ -41,7 +39,7 @@ struct Index {
 
   private swiperController: SwiperController = new SwiperController();
 
-  // 【修复】使用新定义的接口来声明数组类型
+  // 使用新定义的接口来声明数组类型
   private navTabs: NavTabInfo[] = [
     { label: '首页', icon: $r('app.media.icon_home') },
     { label: '题库', icon: $r('app.media.icon_quiz') },
@@ -58,7 +56,7 @@ struct Index {
         HomePage()
 
         // 第2页: 题库
-        QuizBankPage()
+        QuizBankPage({refreshTrigger: this.quizBankRefreshCounter})
 
         // 其他页面的占位符
         Text('错题本页面').width('100%').height('100%').fontSize(30).textAlign(TextAlign.Center).backgroundColor(Color.Pink)
