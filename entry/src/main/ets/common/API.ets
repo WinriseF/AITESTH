@@ -1,5 +1,6 @@
-import { get, post, ApiResponse, postSimple } from '../utls/HttpClient';
 import { QuestionModel } from '../model/QuestionModel';
+import { AppDataSource } from './AppDataSource';
+import HttpClient, { ApiResponse } from '../utls/HttpClient';
 
 export interface GenerateQuestionDto {
   question: string;
@@ -28,15 +29,15 @@ interface ChatRequestBody {
  * @returns 一个Promise，其值为包含生成ID字符串的ApiResponse
  */
 export function submitGenerationTask(params: GenerateQuestionDto): Promise<ApiResponse<string>> {
-  return post<string>('/question/asyncGenerateQuestion', params);
+  return HttpClient.post<string>('/question/asyncGenerateQuestion', params);
 }
 
 export function createQuizSet(params: GenerateQuestionDto): Promise<ApiResponse<QuizSet>> {
-  return post<QuizSet>('/quiz-bank/sets', params);
+  return HttpClient.post<QuizSet>('/quiz-bank/sets', params);
 }
 
 export function getQuizSets(): Promise<ApiResponse<QuizSet[]>> {
-  return get<QuizSet[]>('/quiz-bank/sets');
+  return HttpClient.get<QuizSet[]>('/quiz-bank/sets');
 }
 /**
  * 根据批次ID查询已生成的题目列表
@@ -44,10 +45,30 @@ export function getQuizSets(): Promise<ApiResponse<QuizSet[]>> {
  * @returns 一个Promise，其值为包含题目数组的ApiResponse
  */
 export function getQuestionsByBatchId(generateId: string): Promise<ApiResponse<QuestionModel[]>> {
-  return get<QuestionModel[]>(`/question/question/${generateId}`);
+  return HttpClient.get<QuestionModel[]>(`/question/question/${generateId}`);
 }
 
 export function simpleChat(message: string): Promise<string> {
   const requestBody: ChatRequestBody = { msg: message };
-  return postSimple('/chat/simpleChat', requestBody);
+  return HttpClient.postAndGetRawResponse('/chat/simpleChat', requestBody);
+}
+
+export interface UserLoginDto {
+  username?: string;
+  password?: string;
+}
+
+export interface UserRegistrationDto {
+  username?: string;
+  password?: string;
+  email?: string;
+}
+
+// --- 新增的 API 函数 ---
+export async function loginUser(params: UserLoginDto): Promise<ApiResponse<string>> {
+  return HttpClient.post<string>('/user/login', params);
+}
+
+export async function registerUser(params: UserRegistrationDto): Promise<ApiResponse<string>> {
+  return HttpClient.post<string>('/user/register', params);
 }

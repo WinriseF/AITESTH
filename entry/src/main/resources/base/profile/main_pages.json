@@ -3,6 +3,8 @@
     "pages/Index",
     "pages/QuestionPage",
     "pages/ChatPage",
-    "pages/QuizBankPage"
+    "pages/QuizBankPage",
+    "pages/HomePage",
+    "pages/LoginPage"
   ]
 }

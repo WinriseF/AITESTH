@@ -1,8 +1,9 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
-
+import { AppDataSource } from '../common/AppDataSource'
 const DOMAIN = 0x0000;
+const TAG = 'testTag';
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
@@ -14,16 +15,42 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
   }
 
-  onWindowStageCreate(windowStage: window.WindowStage): void {
-    // Main window is created, set main page for this ability
-    hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+  async onWindowStageCreate(windowStage: window.WindowStage): Promise<void> {
+    hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onWindowStageCreate');
 
-    windowStage.loadContent('pages/Index', (err) => {
-      if (err.code) {
-        hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
+    let initialPage = 'pages/LoginPage'; // 默认启动页是登录页
+
+    try {
+      // 1. 初始化 AppDataSource
+      AppDataSource.getInstance(this.context);
+      hilog.info(DOMAIN, TAG, 'AppDataSource has been initialized successfully.');
+
+      // 2. 检查是否存在已存储的Token
+      const storedToken = await AppDataSource.getInstance().getToken();
+
+      // 3. 如果Token存在且不为空，则修改启动页为主页
+      if (storedToken) {
+        hilog.info(DOMAIN, TAG, 'Found existing token. Setting initial page to Index.');
+        initialPage = 'pages/Index';
+      } else {
+        hilog.info(DOMAIN, TAG, 'No token found. Setting initial page to LoginPage.');
+      }
+
+    } catch (err) {
+      if (err instanceof Error) {
+        hilog.error(DOMAIN, TAG, `Failed during app initialization: ${err.message}`);
+      } else {
+        hilog.error(DOMAIN, TAG, 'Failed during app initialization: An unknown error occurred.');
+      }
+    }
+
+    // 4. 使用我们动态决定的 initialPage 来加载内容
+    windowStage.loadContent(initialPage, (err) => {
+      if (err?.code) {
+        hilog.error(DOMAIN, TAG, 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
         return;
       }
-      hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
+      hilog.info(DOMAIN, TAG, 'Succeeded in loading the content.');
     });
   }
 

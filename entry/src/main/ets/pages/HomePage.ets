@@ -15,6 +15,7 @@ const BATCH_SIZE = 15;
   .shadow({ radius: 20, color: '#1A000000', offsetX: 0, offsetY: 4 })
 }
 
+@Entry
 @Component
 export struct HomePage {
   // 我们将所有与此页面相关的状态变量放在这里
