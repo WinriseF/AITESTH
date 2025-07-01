@@ -91,7 +91,7 @@ struct ChatPage {
         Blank()
         Text('AI 助手').fontSize(18).fontWeight(FontWeight.Bold)
         Blank()
-        Image($r("app.media.ic_back")).width(24).height(24).visibility(Visibility.Hidden) // 占位
+        Image($r("app.media.ic_back")).width(24).height(24).visibility(Visibility.Hidden)
       }
       .width('100%').height(56).padding({ left: 16, right: 16 }).border({ width: { bottom: 1 }, color: '#F0F0F0' })
 

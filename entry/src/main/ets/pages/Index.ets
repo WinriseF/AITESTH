@@ -1,5 +1,3 @@
-// 这个文件现在是应用的主入口和容器
-
 import { HomePage } from './HomePage';
 import { QuizBankPage } from './QuizBankPage';
 
@@ -52,10 +50,10 @@ struct Index {
     Column() {
       // Swiper 作为内容区域，可以左右滑动
       Swiper(this.swiperController) {
-        // 第1页: 首页
+        // 首页
         HomePage()
 
-        // 第2页: 题库
+        // 题库
         QuizBankPage({refreshTrigger: this.quizBankRefreshCounter})
 
         // 其他页面的占位符

@@ -38,7 +38,7 @@ import { getQuizSets, getQuestionsByBatchId, QuizSet } from '../common/API';
           params: { questions: JSON.stringify(response.data) }
         });
       } else {
-        promptAction.showToast({ message: '该题库下暂无题目' });
+        promptAction.showToast({ message: '暂无题目或正在生成' });
       }
     } catch (error) {
       promptAction.showToast({ message: `加载失败: ${(error as Error).message}` });
@@ -58,11 +58,9 @@ export struct QuizBankPage {
 
   private isInitialLoadDone: boolean = false;
 
-  // 组件首次出现在屏幕时调用
+  // 组件点击出现在屏幕时调用
   async aboutToAppear() {
-    // 首次加载数据
     await this.fetchQuizSets();
-    // 标记初始加载完成，此后 @Watch 才能触发刷新
     this.isInitialLoadDone = true;
   }
 

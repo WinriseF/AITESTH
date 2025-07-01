@@ -15,7 +15,7 @@ export interface QuizSet {
   title: string;
   category: string;
   totalQuestions: number;
-  createdAt: string; // 后端的LocalDateTime通常会序列化为ISO格式的字符串
+  createdAt: string; // 后端的LocalDateTime会序列化为ISO格式的字符串
 }
 
 interface ChatRequestBody {

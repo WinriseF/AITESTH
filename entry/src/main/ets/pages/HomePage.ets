@@ -1,6 +1,3 @@
-// 文件路径: src/main/ets/pages/HomePage.ets
-// 这个文件现在包含了所有“首页”的内容和逻辑
-
 import { promptAction } from '@kit.ArkUI';
 import router from '@ohos.router';
 import { QuestionModel } from '../model/QuestionModel';
@@ -27,7 +24,7 @@ export struct HomePage {
   @State isLoading: boolean = false;
   private pollIntervalId: number = -1;
 
-  // 所有业务逻辑函数也都移到这里
+  // 所有业务逻辑函数
   async handleStartQuiz() {
     this.isLoading = true;
     promptAction.showToast({ message: `正在提交生成任务...` });
@@ -118,7 +115,7 @@ export struct HomePage {
 
   build() {
     Column() {
-      // 1. 顶部栏
+      // 顶部栏
       Row() {
         Image($r('app.media.chat'))
           .width(28).height(28)
@@ -131,10 +128,10 @@ export struct HomePage {
       }
       .width('100%').height(56).padding({ left: 24, right: 24 })
 
-      // 2. 可滚动的主体
+      // 可滚动的主体
       Scroll() {
         Column({ space: 16 }) {
-          // 2.1 课程选择卡片
+          // 课程选择卡片
           Row({ space: 16 }) {
             Column({ space: 8 }) {
               Text('IT 开发').fontSize(16).fontWeight(FontWeight.Bold).fontColor(Color.White)
@@ -159,7 +156,7 @@ export struct HomePage {
             .onClick(() => { this.currentTopic = '金融理财'; })
           }
 
-          // 2.2 智能练习卡片
+          // 智能练习卡片
           Column({ space: 16 }) {
             Text('开始智能练习').fontSize(18).fontWeight(FontWeight.Bold).alignSelf(ItemAlign.Start)
             Text('AI 将为您生成专业题目').fontSize(13).fontColor(Color.Gray).alignSelf(ItemAlign.Start)
@@ -194,7 +191,7 @@ export struct HomePage {
               })
           }.aitesCardStyle()
 
-          // 2.3 学习数据卡片
+          // 学习数据卡片
           Column({ space: 16 }) {
             Row() {
               Text('学习数据').fontSize(18).fontWeight(FontWeight.Bold)
