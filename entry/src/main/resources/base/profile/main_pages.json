@@ -5,6 +5,7 @@
     "pages/ChatPage",
     "pages/QuizBankPage",
     "pages/HomePage",
-    "pages/LoginPage"
+    "pages/LoginPage",
+    "pages/MyPage"
   ]
 }

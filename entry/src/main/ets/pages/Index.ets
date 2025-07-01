@@ -1,4 +1,5 @@
 import { HomePage } from './HomePage';
+import { MyPage } from './MyPage';
 import { QuizBankPage } from './QuizBankPage';
 
 // 为导航栏项目定义一个明确的接口
@@ -59,7 +60,7 @@ struct Index {
         // 其他页面的占位符
         Text('错题本页面').width('100%').height('100%').fontSize(30).textAlign(TextAlign.Center).backgroundColor(Color.Pink)
         Text('学习报告页面').width('100%').height('100%').fontSize(30).textAlign(TextAlign.Center).backgroundColor(Color.Orange)
-        Text('我的主页').width('100%').height('100%').fontSize(30).textAlign(TextAlign.Center).backgroundColor(Color.Yellow)
+        MyPage()
       }
       .indicator(false) // 隐藏默认的指示点
       .loop(false)
