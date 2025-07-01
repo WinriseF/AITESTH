@@ -1,14 +1,17 @@
+// 文件路径: src/main/ets/pages/QuizBankPage.ts
+// 【已修正】
+
 import router from '@ohos.router';
 import { promptAction } from '@kit.ArkUI';
 import { getQuizSets, getQuestionsByBatchId, QuizSet } from '../common/API';
-import { QuestionModel } from '../model/QuestionModel';
+// 'QuestionModel' 在此文件中未使用，可以安全移除以保持代码整洁
+// import { QuestionModel } from '../model/QuestionModel';
 
-// 题库卡片子组件
+// 题库卡片子组件 (代码保持不变)
 @Builder function QuizCard(quizSet: QuizSet) {
   Row({ space: 16 }) {
     // 左侧图标
     Column() {
-      // 这里可以根据 quizSet.category 显示不同图标
       Image(quizSet.category === 'IT 开发' ? $r('app.media.ic_code') : $r('app.media.ic_finance'))
         .width(24).height(24)
     }
@@ -34,10 +37,8 @@ import { QuestionModel } from '../model/QuestionModel';
   .onClick(async () => {
     try {
       promptAction.showToast({ message: `正在加载“${quizSet.title}”...` });
-      // 点击时，根据题库的generateId获取对应的所有题目
       const response = await getQuestionsByBatchId(quizSet.generateId);
       if (response.data && response.data.length > 0) {
-        // 获取成功后，跳转到答题页面
         router.pushUrl({
           url: 'pages/QuestionPage',
           params: { questions: JSON.stringify(response.data) }
@@ -53,28 +54,47 @@ import { QuestionModel } from '../model/QuestionModel';
 
 @Entry
 @Component
-struct QuizBankPage {
+export struct QuizBankPage {
+  // 【修改1】@Watch 装饰器被正确地放置在它要监听的属性上
+  // 当 refreshTrigger 的值改变时，会调用 'onRefreshTriggered' 方法
+  @Prop @Watch('onRefreshTriggered') refreshTrigger: number = 0;
+
   @State allQuizSets: QuizSet[] = [];
   @State displayedQuizSets: QuizSet[] = [];
   @State selectedCategory: string = '全部';
-  // 模拟的分类数据
   private categories: string[] = ['全部', 'IT 开发', '金融理财'];
 
+  // 【修改2】添加一个状态标志，防止重复加载
+  private isInitialLoadDone: boolean = false;
+
+  // 组件首次出现在屏幕时调用
   async aboutToAppear() {
+    // 首次加载数据
     await this.fetchQuizSets();
+    // 标记初始加载完成，此后 @Watch 才能触发刷新
+    this.isInitialLoadDone = true;
+  }
+
+  // 【修改3】这个方法本身不再需要任何装饰器
+  onRefreshTriggered() {
+    // 只有在初始加载完成后，由父组件触发的刷新才会执行
+    if (this.isInitialLoadDone) {
+      console.log('Refresh triggered by parent click. Refreshing data...');
+      this.fetchQuizSets();
+    }
   }
 
   async fetchQuizSets() {
     try {
       const response = await getQuizSets();
-      this.allQuizSets = response.data;
-      this.filterQuizSets(); // 初始加载后进行一次过滤
+      // 确保 response.data 存在且是一个数组
+      this.allQuizSets = response?.data || [];
+      this.filterQuizSets(); // 加载后进行一次过滤
     } catch (error) {
       promptAction.showToast({ message: `获取题库列表失败: ${(error as Error).message}` });
     }
   }
 
-  // 根据选择的分类过滤题库
   filterQuizSets() {
     if (this.selectedCategory === '全部') {
       this.displayedQuizSets = this.allQuizSets;
@@ -83,13 +103,17 @@ struct QuizBankPage {
     }
   }
 
-
+  // build 方法保持不变
   build() {
     Column() {
       // 1. 顶部导航栏
       Row() {
         Image($r("app.media.ic_back"))
-          .width(24).height(24).onClick(() => router.back())
+          .width(24).height(24)
+          // 注意：如果这个页面在Swiper里，顶部的返回按钮可能不符合UI/UX设计，
+          // 因为用户可以通过滑动或点击底部Tab返回。这里暂时保留。
+          .onClick(() => router.back())
+          .visibility(Visibility.Hidden) // 暂时隐藏，因为在主Tab页通常没有返回按钮
         Blank()
         Text('题库').fontSize(18).fontWeight(FontWeight.Bold)
         Blank()
@@ -100,14 +124,12 @@ struct QuizBankPage {
 
       // 2. 搜索和分类
       Column({ space: 16 }) {
-        // 搜索框 (目前为静态UI)
         Row() {
           Image($r('app.media.search')).width(16).height(16).margin({ left: 15 })
           TextInput({ placeholder: '搜索题库、知识点...' }).layoutWeight(1).backgroundColor(Color.Transparent)
         }
         .width('100%').height(40).backgroundColor(Color.White).borderRadius(20)
 
-        // 分类标签
         Scroll() {
           Row({ space: 12 }) {
             ForEach(this.categories, (category: string) => {

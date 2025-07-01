@@ -2,7 +2,7 @@ import http from '@ohos.net.http';
 import { BusinessError } from '@kit.BasicServicesKit';
 import util from '@ohos.util';
 
-const API_BASE_URL = 'http://172.27.20.121:8080';
+const API_BASE_URL = 'http://172.27.33.124:8080';
 
 // 定义通用的API响应结构，方便在整个应用中复用
 export interface ApiResponse<T> {
