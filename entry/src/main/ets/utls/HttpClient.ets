@@ -3,7 +3,7 @@ import { BusinessError } from '@ohos.base';
 import { AppDataSource } from '../common/AppDataSource';
 import router from '@ohos.router'; // 引入router用于认证失败跳转
 
-const API_BASE_URL = 'http://192.168.31.202:8080'; // 后端地址
+const API_BASE_URL = 'http://172.27.33.124:8080'; // 后端地址
 
 /**
  * 定义通用的API响应结构，与后端保持一致

@@ -41,7 +41,7 @@ import { getQuizSets, getQuestionsByBatchId, QuizSet } from '../common/API';
         promptAction.showToast({ message: '暂无题目或正在生成' });
       }
     } catch (error) {
-      promptAction.showToast({ message: `加载失败: ${(error as Error).message}` });
+      promptAction.showToast({ message: `模型正在处理中，请稍后` });
     }
   })
 }
